@@ -6,6 +6,7 @@
 #include <QDateTime>
 
 //other widget
+#include "modelwidget.h"
 #include "devicemanagewidget.h"
 
 QT_BEGIN_NAMESPACE
@@ -37,14 +38,18 @@ private slots:
     void on_action_show_flowchart_panel(bool checked);
     void on_action_show_logging_panel(bool checked);
 
-    void on_select_video_device_change();
-    void on_select_audio_device_change();
+    void on_select_device_change(int index);
 
-    void add_logs(QString log_string);
+    void add_logs(const QString &log_string);
 
     //page signal slot
-    void set_scaned_device(QStringList videoDeviceList,QStringList audioDeviceList);
+    void set_scaned_device(const QStringList &videoDeviceList,
+                           const QStringList &audioDeviceList,
+                           const QStringList &videoDevicePathList,
+                           const QStringList & audioDeviceIdList);
 
+signals:
+    void set_current_device(const QString &videoDevice, const QString &audioDevice);
 
 };
 #endif // MAINWINDOW_H
