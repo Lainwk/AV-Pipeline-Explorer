@@ -48,7 +48,7 @@ protected:
 
         // 输出详细执行日志（便于排查）
         if (!allOutput.isEmpty()) {
-            emit add_Logs(QString("[Command][debug] command output:\n%1").arg(allOutput.left(500))); // 截断避免日志过长
+            // emit add_Logs(QString("[Command][debug] command output:\n%1").arg(allOutput.left(500))); // 截断避免日志过长
         }
         emit add_Logs(QString("[Command][debug] command exit code: %1").arg(process.exitCode()));
 

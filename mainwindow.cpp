@@ -26,17 +26,19 @@ MainWindow::~MainWindow()
 
 void MainWindow::init_subpage()
 {
+    QWidget *placeholderPage = ui->contentStack->widget(0);
     //set device_manage_page
     this->device_manage_page = new DeviceManageWidget();
-    // 获取第一个占位页面
-    QWidget *placeholderPage = ui->contentStack->widget(0);
 
-    // 从堆栈中移除占位页面
     ui->contentStack->removeWidget(placeholderPage);
-
-    // 在索引0的位置插入真实的设备管理页面
     ui->contentStack->insertWidget(0, this->device_manage_page);
-    qDebug() << "Device management page added at index 0";
+    qDebug() << "device_manage_page added at index 0";
+
+    this->V4L2_capture_page = new V4L2CaptureWidget();
+    placeholderPage = ui->contentStack->widget(1);
+    ui->contentStack->removeWidget(placeholderPage);
+    ui->contentStack->insertWidget(1, this->V4L2_capture_page);
+    qDebug() << "V4L2_Capture_page added at index 0";
 
     // 删除占位页面
     delete placeholderPage;
@@ -62,6 +64,9 @@ void MainWindow::init_connect()
     connect(this->ui->audioDeviceCombo,&QComboBox::currentIndexChanged,
             this,&MainWindow::on_select_device_change);
 
+    connect(this->ui->clearLogButton,&QPushButton::clicked,
+            this,&MainWindow::on_clear_log_botton_clicked);
+
 
     //other page signal
     //page logs
@@ -75,6 +80,8 @@ void MainWindow::init_connect()
     //set Device
     connect(this,&MainWindow::set_current_device,
             this->device_manage_page,&ModelWidget::set_selected_device);
+    connect(this,&MainWindow::set_current_device,
+            this->V4L2_capture_page,&ModelWidget::set_selected_device);
 
 }
 
@@ -101,6 +108,11 @@ void MainWindow::on_action_show_logging_panel(bool checked)
 {
     this->ui->loggingDock->setVisible(checked);
     this->add_logs(QString("[MainWindow]logging_panel: %1").arg(checked ? "show" : "hide"));
+}
+
+void MainWindow::on_clear_log_botton_clicked()
+{
+    this->ui->logTextEdit->clear();
 }
 
 void MainWindow::on_select_device_change(int index)

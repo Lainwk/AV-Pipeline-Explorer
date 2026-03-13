@@ -8,6 +8,7 @@
 //other widget
 #include "modelwidget.h"
 #include "devicemanagewidget.h"
+#include "v4l2capturewidget.h"
 
 QT_BEGIN_NAMESPACE
 namespace Ui { class MainWindow; }
@@ -27,6 +28,7 @@ private:
 
     //other pages
     DeviceManageWidget* device_manage_page;
+    V4L2CaptureWidget* V4L2_capture_page;
 
     //function
     void init_subpage();
@@ -37,6 +39,7 @@ private slots:
     void on_action_show_config_panel(bool checked);
     void on_action_show_flowchart_panel(bool checked);
     void on_action_show_logging_panel(bool checked);
+    void on_clear_log_botton_clicked();
 
     void on_select_device_change(int index);
 

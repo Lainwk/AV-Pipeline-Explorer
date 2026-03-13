@@ -101,7 +101,7 @@ void DeviceManageWidget::scan_video_devices()
         item->setText(2, "to test");
         item->setData(0, Qt::UserRole, devicePath);
 
-        emit this->add_Logs(QString("[DeviceManageWidget]find valid USBIPD video device: %1").arg(displayText));
+        //emit this->add_Logs(QString("[DeviceManageWidget]find valid USBIPD video device: %1").arg(displayText));
     }
 
     int validDeviceCount = ui->videoDeviceTree->topLevelItemCount();
@@ -184,7 +184,7 @@ void DeviceManageWidget::scan_audio_devices()
             item->setText(2, "no test");
             item->setData(0, Qt::UserRole, hwDevice);
 
-            emit this->add_Logs(QString("[DeviceManageWidget]find audio device: %1 - %2").arg(hwDevice).arg(deviceName.isEmpty() ? cardName : deviceName));
+            //emit this->add_Logs(QString("[DeviceManageWidget]find audio device: %1 - %2").arg(hwDevice).arg(deviceName.isEmpty() ? cardName : deviceName));
         }
     }
 
@@ -197,7 +197,7 @@ void DeviceManageWidget::scan_audio_devices()
         item->setText(2, "no test");
         item->setData(0, Qt::UserRole, "default");
 
-        emit this->add_Logs("[DeviceManageWidget]add default audio device: default");
+        //emit this->add_Logs("[DeviceManageWidget]add default audio device: default");
     }
 
     emit this->add_Logs(QString("[DeviceManageWidget]total find %1 audio devices").arg(ui->audioDeviceTree->topLevelItemCount()));
