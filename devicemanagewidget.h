@@ -28,6 +28,7 @@ private:
 
     void scan_video_devices();
     void scan_audio_devices();
+    selectedDeviceV4L2Params parseV4L2Params(const QString &devicePath);
 
     virtual void init_connect() override;
 
@@ -46,7 +47,8 @@ signals:
     void set_scaned_devices(const QStringList &videoDeviceList,
                             const QStringList &audioDeviceList,
                             const QStringList &videoDevicePathList,
-                            const QStringList &audioDeviceIdList);
+                            const QStringList &audioDeviceIdList,
+                            const QList<selectedDeviceV4L2Params> &videoDeviceParamsList);
 
 };
 

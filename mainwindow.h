@@ -49,10 +49,11 @@ private slots:
     void set_scaned_device(const QStringList &videoDeviceList,
                            const QStringList &audioDeviceList,
                            const QStringList &videoDevicePathList,
-                           const QStringList & audioDeviceIdList);
+                           const QStringList & audioDeviceIdList,
+                           const QList<selectedDeviceV4L2Params> &videoDeviceParamsList);
 
 signals:
-    void set_current_device(const QString &videoDevice, const QString &audioDevice);
+    void set_current_device(const selectedDeviceV4L2Params &videoParams, const QString &audioDevice);
 
 };
 #endif // MAINWINDOW_H

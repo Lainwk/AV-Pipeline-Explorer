@@ -13,14 +13,10 @@
 #include <string.h>     // strerror
 #include <sys/mman.h>   // mmap
 #include <sys/ioctl.h>
+#include <modelwidget.h>
+#include <sys/select.h>
 
-// V4L2参数结构体
-struct V4L2Params {
-    int width = 640;               // 默认宽度
-    int height = 480;              // 默认高度
-    int fps = 30;                  // 默认帧率
-    uint32_t pixFmt = V4L2_PIX_FMT_YUYV; // 默认像素格式
-};
+
 
 class V4L2PreviewThread : public QThread
 {

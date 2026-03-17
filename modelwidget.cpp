@@ -1,14 +1,12 @@
 #include "modelwidget.h"
 
 ModelWidget::ModelWidget(QWidget *parent)
-    : QWidget{parent}
 {
-
 
 }
 
-void ModelWidget::set_selected_device(const QString &videoDevice, const QString &audioDevice)
+void ModelWidget::set_select_device(const selectedDeviceV4L2Params &newCurrentVideoDeviceParams, const QString &newSelected_audio_device)
 {
-    this->selected_video_device = videoDevice;
-    this->selected_audio_device = audioDevice;
+    currentVideoDeviceParams = newCurrentVideoDeviceParams;
+    selected_audio_device = newSelected_audio_device;
 }

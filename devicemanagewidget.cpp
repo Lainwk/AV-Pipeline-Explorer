@@ -203,6 +203,124 @@ void DeviceManageWidget::scan_audio_devices()
     emit this->add_Logs(QString("[DeviceManageWidget]total find %1 audio devices").arg(ui->audioDeviceTree->topLevelItemCount()));
 }
 
+selectedDeviceV4L2Params DeviceManageWidget::parseV4L2Params(const QString &devicePath)
+{
+    selectedDeviceV4L2Params params;
+    // 1. 初始化设备路径
+    params.selectedVideoDevice = devicePath;
+    // 默认像素格式先设为YUYV（你指定的默认值）
+    params.supportPixFmt = V4L2_PIX_FMT_YUYV;
+
+    // 2. 执行v4l2-ctl命令获取详细格式信息（关键：--list-formats-ext）
+    QString cmdOutput = execute_command("v4l2-ctl",
+        QStringList() << "--device=" + devicePath << "--list-formats-ext",
+        8000); // 延长超时适配USBIPD设备
+
+    if (cmdOutput.isEmpty()) {
+        // 兜底默认参数
+        params.defaultParams = V4L2Params();
+        params.supportRes.append(QSize(640, 480));
+        params.supportFps.append(30);
+        return params;
+    }
+
+    // 3. 解析像素格式（优先找YUYV，其次MJPEG）
+    QRegularExpression pixFmtRegex(R"(Pixel Format: '(\w+)' \((\w+)\))");
+    QRegularExpressionMatchIterator fmtIt = pixFmtRegex.globalMatch(cmdOutput);
+    while (fmtIt.hasNext()) {
+        QRegularExpressionMatch fmtMatch = fmtIt.next();
+        QString fmtCode = fmtMatch.captured(1);
+        // 匹配YUYV/MJPEG/H264等格式
+        if (fmtCode == "YUYV") {
+            params.supportPixFmt = V4L2_PIX_FMT_YUYV;
+            break; // 优先YUYV，找到就退出
+        } else if (fmtCode == "MJPG" && params.supportPixFmt == V4L2_PIX_FMT_YUYV) {
+            params.supportPixFmt = V4L2_PIX_FMT_MJPEG; // 备选MJPEG
+        } else if (fmtCode == "H264" && params.supportPixFmt == V4L2_PIX_FMT_YUYV) {
+            params.supportPixFmt = V4L2_PIX_FMT_H264; // 备选H264
+        }
+    }
+
+    // 4. 解析分辨率和对应帧率（核心逻辑）
+    // 正则匹配：Size: 1920x1080 或 Size: 640x480
+    QRegularExpression resRegex(R"(Size: (\d+)x(\d+))");
+    // 正则匹配：Frame rate: 30.000 fps 或 Frame rate: 15 fps
+    QRegularExpression fpsRegex(R"(Frame rate: (\d+)\.?\d* fps)");
+
+    QStringList lines = cmdOutput.split('\n');
+    QSize currentRes; // 临时存储当前解析的分辨率
+    bool inResBlock = false; // 标记是否在某个分辨率的帧率块内
+
+    for (const QString &line : lines) {
+        QString trimLine = line.trimmed();
+        // 匹配分辨率
+        QRegularExpressionMatch resMatch = resRegex.match(trimLine);
+        if (resMatch.hasMatch()) {
+            // 上一个分辨率解析完成，重置标记
+            inResBlock = true;
+            int w = resMatch.captured(1).toInt();
+            int h = resMatch.captured(2).toInt();
+            currentRes = QSize(w, h);
+            // 去重添加分辨率
+            if (!params.supportRes.contains(currentRes)) {
+                params.supportRes.append(currentRes);
+            }
+            continue;
+        }
+
+        // 匹配帧率（仅在分辨率块内）
+        if (inResBlock && !currentRes.isNull()) {
+            QRegularExpressionMatch fpsMatch = fpsRegex.match(trimLine);
+            if (fpsMatch.hasMatch()) {
+                int fps = fpsMatch.captured(1).toInt();
+                // 帧率非0且去重
+                if (fps > 0 && !params.supportFps.contains(fps)) {
+                    params.supportFps.append(fps);
+                }
+            }
+        }
+
+        // 遇到空行/新格式块，退出当前分辨率块
+        if (trimLine.isEmpty() || trimLine.startsWith("Pixel Format")) {
+            inResBlock = false;
+            currentRes = QSize();
+        }
+    }
+
+    // 5. 设置默认参数（优先选第一个分辨率+第一个帧率，兜底640x480）
+    params.defaultParams = V4L2Params();
+    // 分辨率默认值
+    if (!params.supportRes.isEmpty()) {
+        params.defaultParams.width = params.supportRes.first().width();
+        params.defaultParams.height = params.supportRes.first().height();
+    }
+    // 帧率默认值
+    if (!params.supportFps.isEmpty()) {
+        params.defaultParams.fps = params.supportFps.first();
+    }
+    // 像素格式默认值（同步已解析的supportPixFmt）
+    params.defaultParams.pixFmt = params.supportPixFmt;
+
+    // 6. 兜底：如果解析结果为空，补充基础值
+    if (params.supportRes.isEmpty()) {
+        params.supportRes.append(QSize(640, 480));
+        params.supportRes.append(QSize(1280, 720));
+    }
+    if (params.supportFps.isEmpty()) {
+        params.supportFps.append(15);
+        params.supportFps.append(30);
+    }
+
+    qDebug() << "[parseV4L2Params] 解析完成:"
+             << "设备=" << devicePath
+             << "默认分辨率=" << params.defaultParams.width << "x" << params.defaultParams.height
+             << "默认帧率=" << params.defaultParams.fps
+             << "像素格式=" << (params.supportPixFmt == V4L2_PIX_FMT_YUYV ? "YUYV" : "MJPEG");
+
+    return params;
+}
+
+
 void DeviceManageWidget::on_scan_button_clicked()
 {
     emit this->add_Logs("[DeviceManageWidget]start scan device");
@@ -227,17 +345,31 @@ void DeviceManageWidget::on_scan_button_clicked()
     QStringList audioDeviceList;
     QStringList videoDevicePathList;
     QStringList audioDeviceIdList;
+    QList<selectedDeviceV4L2Params> videoDeviceParamsList;
 
     // 收集视频设备
-    for (int i = 0; i < ui->videoDeviceTree->topLevelItemCount(); ++i)
-    {
-        QTreeWidgetItem *item = ui->videoDeviceTree->topLevelItem(i);
-        QString devicePath = item->data(0, Qt::UserRole).toString();
-        QString displayText = item->text(0); // 包含设备名称的完整文本
-        videoDeviceList.append(displayText);
-        videoDevicePathList.append(devicePath);
 
-    }
+    for (int i = 0; i < ui->videoDeviceTree->topLevelItemCount(); ++i)
+        {
+            QTreeWidgetItem *item = ui->videoDeviceTree->topLevelItem(i);
+            QString devicePath = item->data(0, Qt::UserRole).toString();
+            QString displayText = item->text(0);
+
+            // 1. 收集基础信息
+            videoDeviceList.append(displayText);
+            videoDevicePathList.append(devicePath);
+
+            // 2. 提取已存在于TreeItem中的参数（避免重复解析）
+            if (item->data(0, Qt::UserRole + 1).canConvert<selectedDeviceV4L2Params>()) {
+                selectedDeviceV4L2Params params = item->data(0, Qt::UserRole + 1).value<selectedDeviceV4L2Params>();
+                videoDeviceParamsList.append(params);
+            } else {
+                // 兜底：重新解析参数
+                selectedDeviceV4L2Params params = parseV4L2Params(devicePath);
+                videoDeviceParamsList.append(params);
+            }
+        }
+
 
     // 收集音频设备
     for (int i = 0; i < ui->audioDeviceTree->topLevelItemCount(); ++i)
@@ -249,7 +381,7 @@ void DeviceManageWidget::on_scan_button_clicked()
         audioDeviceIdList.append(deviceId);
     }
 
-    emit this->set_scaned_devices(videoDeviceList,audioDeviceList,videoDevicePathList,audioDeviceIdList);
+    emit this->set_scaned_devices(videoDeviceList,audioDeviceList,videoDevicePathList,audioDeviceIdList,videoDeviceParamsList);
     // 完成
     emit this->add_Logs("[DeviceManageWidget]scan device over");
 
@@ -360,11 +492,11 @@ void DeviceManageWidget::on_audio_device_double_clicked(QTreeWidgetItem *item, i
 
 void DeviceManageWidget::on_test_video_button_clicked()
 {
-    if(this->selected_video_device.isEmpty()){
+    if(this->currentVideoDeviceParams.selectedVideoDevice.isEmpty()){
         this->add_Logs("[DeviceManageWidget]no video device selected");
         return;
     }
-    QString devicePath = this->selected_video_device;
+    QString devicePath = this->currentVideoDeviceParams.selectedVideoDevice;
     this->add_Logs(QString("[DeviceManageWidget]start test USBIPD video device:%1").arg(devicePath));
 
     // 1. 临时提权（保留）

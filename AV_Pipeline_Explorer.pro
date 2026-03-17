@@ -31,7 +31,6 @@ SOURCES += \
     main.cpp \
     mainwindow.cpp \
     modelwidget.cpp \
-    openglvideowidget.cpp \
     v4l2capturewidget.cpp \
     v4l2previewthread.cpp
 
@@ -39,7 +38,6 @@ HEADERS += \
     devicemanagewidget.h \
     mainwindow.h \
     modelwidget.h \
-    openglvideowidget.h \
     v4l2capturewidget.h \
     v4l2previewthread.h
 

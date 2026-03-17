@@ -73,15 +73,16 @@ void MainWindow::init_connect()
     connect(this->device_manage_page,&ModelWidget::add_Logs,
             this,&MainWindow::add_logs);
 
-    //Device Manage Page
+    //set Device
+    // set_current_device信号连接
+    connect(this,&MainWindow::set_current_device,
+            this->device_manage_page,&ModelWidget::set_select_device);
+    connect(this,&MainWindow::set_current_device,
+            this->V4L2_capture_page,&ModelWidget::set_select_device);
+
+    // 替换DeviceManageWidget的set_scaned_devices信号连接（需同步修改DeviceManageWidget的信号）
     connect(this->device_manage_page,&DeviceManageWidget::set_scaned_devices,
             this,&MainWindow::set_scaned_device);
-
-    //set Device
-    connect(this,&MainWindow::set_current_device,
-            this->device_manage_page,&ModelWidget::set_selected_device);
-    connect(this,&MainWindow::set_current_device,
-            this->V4L2_capture_page,&ModelWidget::set_selected_device);
 
 }
 
@@ -119,9 +120,25 @@ void MainWindow::on_select_device_change(int index)
 {
     Q_UNUSED(index);
     this->add_logs("[Setting]current device changed");
-    emit this->set_current_device(QString(this->ui->videoDeviceCombo->currentData().toString()),
-                                  QString(this->ui->audioDeviceCombo->currentData().toString()));
-    this->add_logs(QString("[Setting]current video device:%1, current audio device:%2").arg(this->ui->videoDeviceCombo->currentText()).arg(this->ui->audioDeviceCombo->currentText()));
+
+    // 关键：根据选中的设备路径，构建selectedDeviceV4L2Params结构体
+    QString videoDevPath = this->ui->videoDeviceCombo->currentData().toString();
+    QString audioDev = this->ui->audioDeviceCombo->currentData().toString();
+
+    // （TODO：从设备扫描结果中匹配videoDevPath对应的参数，填充结构体）
+    selectedDeviceV4L2Params devParams;
+    devParams.selectedVideoDevice = videoDevPath;
+    // devParams.supportRes = 从扫描结果中获取的分辨率列表;
+    // devParams.supportFps = 从扫描结果中获取的帧率列表;
+    // devParams.defaultParams = 从扫描结果中获取的默认参数;
+    // devParams.supportPixFmt = 从扫描结果中获取的像素格式;
+
+    // 发送结构体信号
+    emit this->set_current_device(devParams, audioDev);
+
+    this->add_logs(QString("[Setting]current video device:%1, current audio device:%2")
+                   .arg(this->ui->videoDeviceCombo->currentText())
+                   .arg(this->ui->audioDeviceCombo->currentText()));
 }
 
 
@@ -137,36 +154,40 @@ void MainWindow::add_logs(const QString &log_string)
 void MainWindow::set_scaned_device(const QStringList &videoDeviceList,
                                    const QStringList &audioDeviceList,
                                    const QStringList &videoDevicePathList,
-                                   const QStringList & audioDeviceIdList)
+                                   const QStringList &audioDeviceIdList,
+                                   const QList<selectedDeviceV4L2Params> &videoDeviceParamsList)
 {
     qDebug()<<"set all device";
     this->ui->videoDeviceCombo->clear();
-        for(int i=0; i<videoDeviceList.size(); i++){
-            QString displayText = videoDeviceList.at(i);
-            QString devicePath = videoDevicePathList.at(i);
-            // 添加显示文本，并设置隐藏数据（Qt::UserRole）
-            this->ui->videoDeviceCombo->addItem(displayText, devicePath);
-        }
-        if(!videoDeviceList.isEmpty()){
-            this->ui->videoDeviceCombo->setCurrentIndex(0);
-        }
+    for(int i=0; i<videoDeviceList.size(); i++){
+        QString displayText = videoDeviceList.at(i);
+        QString devicePath = videoDevicePathList.at(i);
+        QVariant var;
+        var.setValue(videoDeviceParamsList.at(i));
+        this->ui->videoDeviceCombo->addItem(displayText, var); // 替换原devicePath为结构体
+    }
+    if(!videoDeviceList.isEmpty()){
+        this->ui->videoDeviceCombo->setCurrentIndex(0);
+    }
 
-        // 清空音频ComboBox并添加Item（显示文本+隐藏数据）
-        this->ui->audioDeviceCombo->clear();
-        for(int i=0; i<audioDeviceList.size(); i++){
-            QString displayText = audioDeviceList.at(i);
-            QString deviceId = audioDeviceIdList.at(i);
-            // 添加显示文本，并设置隐藏数据（Qt::UserRole）
-            this->ui->audioDeviceCombo->addItem(displayText, deviceId);
-        }
-        if(!audioDeviceList.isEmpty()){
-            this->ui->audioDeviceCombo->setCurrentIndex(0);
-        }
+    // 音频设备逻辑不变
+    this->ui->audioDeviceCombo->clear();
+    for(int i=0; i<audioDeviceList.size(); i++){
+        QString displayText = audioDeviceList.at(i);
+        QString deviceId = audioDeviceIdList.at(i);
+        this->ui->audioDeviceCombo->addItem(displayText, deviceId);
+    }
+    if(!audioDeviceList.isEmpty()){
+        this->ui->audioDeviceCombo->setCurrentIndex(0);
+    }
 
-    emit this->set_current_device(QString(this->ui->videoDeviceCombo->currentData().toString()),
-                                  QString(this->ui->audioDeviceCombo->currentData().toString()));
-    this->add_logs(QString("[Setting]current video device:%1, current audio device:%2").arg(this->ui->videoDeviceCombo->currentText()).arg(this->ui->audioDeviceCombo->currentText()));
-
-
+    // 发送初始选中设备的参数
+    if(!videoDeviceParamsList.isEmpty()){
+        emit this->set_current_device(videoDeviceParamsList.at(0),
+                                      this->ui->audioDeviceCombo->currentData().toString());
+    }
+    this->add_logs(QString("[Setting]current video device:%1, current audio device:%2")
+                   .arg(this->ui->videoDeviceCombo->currentText())
+                   .arg(this->ui->audioDeviceCombo->currentText()));
 }
 

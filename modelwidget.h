@@ -4,6 +4,32 @@
 #include <QObject>
 #include <QWidget>
 #include <QProcess>
+#include <linux/videodev2.h>
+#include <fcntl.h>      // open/close
+#include <unistd.h>     // close
+#include <errno.h>      // errno
+#include <string.h>     // strerror
+#include <QFrame>
+// V4L2参数结构体
+struct V4L2Params {
+    int width = 640;               // 默认宽度
+    int height = 480;              // 默认高度
+    int fps = 30;                  // 默认帧率
+    uint32_t pixFmt = V4L2_PIX_FMT_YUYV; // 默认像素格式
+};
+
+struct selectedDeviceV4L2Params {
+    QString selectedVideoDevice;          // 设备路径（/dev/videoX）
+    QList<QSize> supportRes;              // 支持的分辨率列表
+    QList<int> supportFps;                // 对应分辨率的帧率列表
+    V4L2Params defaultParams;             // 默认采集参数（启动时用）
+    uint32_t supportPixFmt = V4L2_PIX_FMT_YUYV; // 支持的像素格式（优先YUYV）
+};
+
+// 新增：注册自定义类型，让Qt识别
+Q_DECLARE_METATYPE(selectedDeviceV4L2Params);
+// 若传递列表，额外注册列表类型
+Q_DECLARE_METATYPE(QList<selectedDeviceV4L2Params>);
 
 class ModelWidget : public QWidget
 {
@@ -11,12 +37,15 @@ class ModelWidget : public QWidget
 public:
     explicit ModelWidget(QWidget *parent = nullptr);
 
+public slots:
+    void set_select_device(const selectedDeviceV4L2Params &newCurrentVideoDeviceParams, const QString &audioDevice);
+
 signals:
     void add_Logs(const QString &message);
 
 protected:
     // 当前选中的设备
-    QString selected_video_device;
+    selectedDeviceV4L2Params currentVideoDeviceParams; // 新增：当前选中设备的V4L2参数
     QString selected_audio_device;
 
     virtual void init_connect() = 0;
@@ -41,7 +70,7 @@ protected:
             return QString();
         }
 
-        // 同时读取stdout和stderr（FFmpeg主要输出到stderr）
+        // 同时读取stdout和stderr
         QString stdoutOutput = process.readAllStandardOutput().trimmed();
         QString stderrOutput = process.readAllStandardError().trimmed();
         QString allOutput = stdoutOutput + "\n" + stderrOutput;
@@ -53,11 +82,8 @@ protected:
         emit add_Logs(QString("[Command][debug] command exit code: %1").arg(process.exitCode()));
 
         return allOutput;
-    };
+    }
 
-public slots:
-    void set_selected_device(const QString &videoDevice,const QString &audioDevice);
 
 };
-
 #endif // MODELWIDGET_H

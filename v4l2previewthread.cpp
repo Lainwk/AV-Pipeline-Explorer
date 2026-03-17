@@ -46,39 +46,70 @@ void V4L2PreviewThread::run()
     }
 
     //4.read frame data to buffer
-    while(this->isRunning){
+    emit this->add_Logs("[V4L2PreviewThread][Debug] Entering frame capture loop with timeout");
 
-        emit this->add_Logs("[V4L2PreviewThread][Success] start thread run loop success");
+    int frameCount = 0;
+    int timeoutCount = 0;
+    const int MAX_TIMEOUT = 10; // 最多允许10次超时
+
+    while(this->isRunning){
+        // 使用select检测设备是否有数据可读（超时5秒）
+        fd_set fds;
+        struct timeval tv;
+        FD_ZERO(&fds);
+        FD_SET(this->v4l2Fd, &fds);
+        tv.tv_sec = 5;  // 5秒超时
+        tv.tv_usec = 0;
+
+        int ret = select(this->v4l2Fd + 1, &fds, nullptr, nullptr, &tv);
+        if (ret < 0) {
+            emit this->add_Logs(QString("[V4L2PreviewThread][Error] select() failed: %1 (errno: %2)")
+                              .arg(strerror(errno)).arg(errno));
+            break;
+        } else if (ret == 0) {
+            // 超时
+            timeoutCount++;
+            emit this->add_Logs(QString("[V4L2PreviewThread][Warning] Timeout waiting for frame (count: %1)")
+                              .arg(timeoutCount));
+            if (timeoutCount >= MAX_TIMEOUT) {
+                emit this->add_Logs("[V4L2PreviewThread][Error] Too many timeouts, stopping capture");
+                break;
+            }
+            continue;
+        }
+
+        // 有数据可读，重置超时计数
+        timeoutCount = 0;
 
         struct v4l2_buffer buf = {0};
         buf.type = V4L2_BUF_TYPE_VIDEO_CAPTURE;
         buf.memory = V4L2_MEMORY_MMAP;
 
-        // read frame
-        int ret = ioctl(this->v4l2Fd,VIDIOC_DQBUF,&buf);
+        ret = ioctl(this->v4l2Fd, VIDIOC_DQBUF, &buf);
         if(ret < 0){
-            if(errno == EAGAIN){
-                msleep(10);
-                continue;
-            } else {
-                emit this->add_Logs(QString("[V4L2PreviewThread][Error] Dequeue buffer failed: %1 (errno: %2)")
-                                  .arg(strerror(errno)).arg(errno));
-                break;
-            }
+            emit this->add_Logs(QString("[V4L2PreviewThread][Error] Dequeue buffer failed: %1 (errno: %2)")
+                              .arg(strerror(errno)).arg(errno));
+            break;
         }
 
+        // 成功获取帧
+        frameCount++;
+        if (frameCount == 1) {
+            emit this->add_Logs("[V4L2PreviewThread][Success] First frame captured!");
+        }
+        if (frameCount % 30 == 0) {
+            emit this->add_Logs(QString("[V4L2PreviewThread][Success] Captured frame #%1").arg(frameCount));
+        }
 
         emit this->previewImageReady(static_cast<uchar*>(buffers[buf.index].start),
-                this->params.width, this->params.height);    //send RGB Image to UI
-        //emit this->add_Logs("send frame success");
+                this->params.width, this->params.height);
 
-        // 6. 将缓冲区重新入队
+        // 将缓冲区重新入队
         if (ioctl(v4l2Fd, VIDIOC_QBUF, &buf) < 0) {
             emit this->add_Logs(QString("[V4L2PreviewThread][Error] Requeue buffer failed: %1 (errno: %2)")
                               .arg(strerror(errno)).arg(errno));
             break;
         }
-
     }
 
     //release
@@ -90,11 +121,13 @@ void V4L2PreviewThread::run()
 
 void V4L2PreviewThread::setV4l2Fd(int newV4l2Fd)
 {
+    QMutexLocker locker(&this->mutex);
     v4l2Fd = newV4l2Fd;
 }
 
 void V4L2PreviewThread::setParams(const V4L2Params &newParams)
 {
+    QMutexLocker locker(&this->mutex);
     params = newParams;
 }
 
@@ -189,6 +222,11 @@ bool V4L2PreviewThread::set_V4L2_Format_And_Fps()
         return false;
     }
 
+    emit this->add_Logs(QString("[V4L2PreviewThread][Debug] Setting format: %1x%2, FPS: %3, PixFmt: 0x%4")
+                           .arg(params.width)
+                           .arg(params.height)
+                           .arg(params.fps)
+                           .arg(params.pixFmt, 0, 16));
     //set image format
     struct v4l2_format fmt = {0};
     fmt.type = V4L2_BUF_TYPE_VIDEO_CAPTURE;
@@ -203,6 +241,11 @@ bool V4L2PreviewThread::set_V4L2_Format_And_Fps()
         return false;
     }
 
+    emit this->add_Logs(QString("[V4L2PreviewThread][Debug] Actual format: %1x%2, PixFmt: 0x%3")
+                           .arg(fmt.fmt.pix.width)
+                           .arg(fmt.fmt.pix.height)
+                           .arg(fmt.fmt.pix.pixelformat, 0, 16));
+
     // 2. 设置帧率
     struct v4l2_streamparm streamparm = {0};
     streamparm.type = V4L2_BUF_TYPE_VIDEO_CAPTURE;
@@ -215,11 +258,17 @@ bool V4L2PreviewThread::set_V4L2_Format_And_Fps()
         return false;
     }
 
+    emit this->add_Logs(QString("[V4L2PreviewThread][Debug] Actual FPS: %1/%2 = %3").arg(streamparm.parm.capture.timeperframe.denominator)
+                        .arg(streamparm.parm.capture.timeperframe.numerator)
+                        .arg(streamparm.parm.capture.timeperframe.denominator /
+                             streamparm.parm.capture.timeperframe.numerator));
     emit this->add_Logs("[V4L2PreviewThread][Success] Set V4L2 format & fps success");
 
     return true;
 
 }
+
+
 
 bool V4L2PreviewThread::start_V4L2_Stream()
 {
@@ -232,8 +281,29 @@ bool V4L2PreviewThread::start_V4L2_Stream()
     }
     emit this->add_Logs("[V4L2PreviewThread][Success] start V4L2 stream success");
 
+    // ========== 关键修复：触发USBIPD设备开始传输数据 ==========
+    // USBIPD设备需要先尝试读取一次来激活数据流
+    emit this->add_Logs("[V4L2PreviewThread][Debug] Triggering USBIPD device data stream...");
+
+    fd_set fds;
+    struct timeval tv;
+    FD_ZERO(&fds);
+    FD_SET(v4l2Fd, &fds);
+    tv.tv_sec = 2;  // 等待2秒让设备启动
+    tv.tv_usec = 0;
+
+    int ret = select(v4l2Fd + 1, &fds, nullptr, nullptr, &tv);
+    if (ret > 0) {
+        emit this->add_Logs("[V4L2PreviewThread][Success] Device ready, data stream active");
+    } else if (ret == 0) {
+        emit this->add_Logs("[V4L2PreviewThread][Warning] Device startup timeout, but will continue trying");
+    } else {
+        emit this->add_Logs(QString("[V4L2PreviewThread][Warning] Device check failed: %1").arg(strerror(errno)));
+    }
+
     return true;
 }
+
 
 void V4L2PreviewThread::stop_V4L2_Stream()
 {
