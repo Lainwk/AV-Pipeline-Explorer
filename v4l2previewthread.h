@@ -15,6 +15,7 @@
 #include <sys/ioctl.h>
 #include <modelwidget.h>
 #include <sys/select.h>
+#include <QString>
 
 
 

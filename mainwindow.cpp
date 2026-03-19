@@ -128,10 +128,8 @@ void MainWindow::on_select_device_change(int index)
     // （TODO：从设备扫描结果中匹配videoDevPath对应的参数，填充结构体）
     selectedDeviceV4L2Params devParams;
     devParams.selectedVideoDevice = videoDevPath;
-    // devParams.supportRes = 从扫描结果中获取的分辨率列表;
-    // devParams.supportFps = 从扫描结果中获取的帧率列表;
-    // devParams.defaultParams = 从扫描结果中获取的默认参数;
-    // devParams.supportPixFmt = 从扫描结果中获取的像素格式;
+    QVariant var = this->ui->videoDeviceCombo->currentData();
+    devParams = var.value<selectedDeviceV4L2Params>();
 
     // 发送结构体信号
     emit this->set_current_device(devParams, audioDev);
@@ -170,7 +168,6 @@ void MainWindow::set_scaned_device(const QStringList &videoDeviceList,
         this->ui->videoDeviceCombo->setCurrentIndex(0);
     }
 
-    // 音频设备逻辑不变
     this->ui->audioDeviceCombo->clear();
     for(int i=0; i<audioDeviceList.size(); i++){
         QString displayText = audioDeviceList.at(i);

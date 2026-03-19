@@ -281,8 +281,6 @@ bool V4L2PreviewThread::start_V4L2_Stream()
     }
     emit this->add_Logs("[V4L2PreviewThread][Success] start V4L2 stream success");
 
-    // ========== 关键修复：触发USBIPD设备开始传输数据 ==========
-    // USBIPD设备需要先尝试读取一次来激活数据流
     emit this->add_Logs("[V4L2PreviewThread][Debug] Triggering USBIPD device data stream...");
 
     fd_set fds;

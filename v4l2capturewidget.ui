@@ -81,14 +81,7 @@
      </property>
      <layout class="QGridLayout" name="gridLayout_params">
       <item row="0" column="0">
-       <widget class="QLabel" name="label_resolution">
-        <property name="text">
-         <string>分辨率：</string>
-        </property>
-       </widget>
-      </item>
-      <item row="0" column="1">
-       <widget class="QComboBox" name="comboBox_resolution">
+       <widget class="QComboBox" name="comboBox_video_params">
         <property name="sizePolicy">
          <sizepolicy hsizetype="Expanding" vsizetype="Fixed">
           <horstretch>0</horstretch>
@@ -108,49 +101,6 @@
         <item>
          <property name="text">
           <string>1920x1080（1080P）</string>
-         </property>
-        </item>
-       </widget>
-      </item>
-      <item row="0" column="2">
-       <widget class="QLabel" name="label_fps">
-        <property name="text">
-         <string>帧率（FPS）：</string>
-        </property>
-       </widget>
-      </item>
-      <item row="0" column="3">
-       <widget class="QLineEdit" name="lineEdit_fps">
-        <property name="text">
-         <string>10</string>
-        </property>
-        <property name="maxLength">
-         <number>3</number>
-        </property>
-       </widget>
-      </item>
-      <item row="0" column="4">
-       <widget class="QLabel" name="label_pixfmt">
-        <property name="text">
-         <string>像素格式：</string>
-        </property>
-       </widget>
-      </item>
-      <item row="0" column="5">
-       <widget class="QComboBox" name="comboBox_pixfmt">
-        <item>
-         <property name="text">
-          <string>MJPEG（压缩格式）</string>
-         </property>
-        </item>
-        <item>
-         <property name="text">
-          <string>YUYV422（原始格式）</string>
-         </property>
-        </item>
-        <item>
-         <property name="text">
-          <string>RGB24（色彩格式）</string>
          </property>
         </item>
        </widget>

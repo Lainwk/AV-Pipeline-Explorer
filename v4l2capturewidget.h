@@ -27,6 +27,9 @@ public:
     explicit V4L2CaptureWidget(QWidget *parent = nullptr);
     ~V4L2CaptureWidget();
 
+public slots:
+    void set_select_device(const selectedDeviceV4L2Params &newCurrentVideoDeviceParams, const QString &audioDevice);
+
 private:
     Ui::V4L2CaptureWidget *ui;
 
@@ -42,11 +45,12 @@ private:
 
     // YUYV转RGB方法
     QImage convertYuyvToRgb(const uchar *data, int width, int height);
-
+    QString getPixFmtString(uint32_t pixFmt);
 private slots:
     void on_open_close_device_button_clicked();
     void add_local_logs(const QString &logMessage);
     void updateVideoFrame(const uchar *yuyvData, int width, int height);
+    void update_video_params();
 
 protected:
     void init_connect();

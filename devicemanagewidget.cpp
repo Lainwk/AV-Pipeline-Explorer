@@ -57,9 +57,6 @@ void DeviceManageWidget::scan_video_devices()
     for (const QString &device : videoDeviceList)
     {
         QString devicePath = "/dev/" + device;
-
-        // ========== 核心修复：替换--query-capabilities为--info ==========
-        // 旧版v4l2-ctl无--query-capabilities，用--info获取Capabilities
         QString devInfo = execute_command("v4l2-ctl",
                                          QStringList() << "--device=" + devicePath << "--info",
                                          5000); // 延长超时适配USBIPD
@@ -77,7 +74,7 @@ void DeviceManageWidget::scan_video_devices()
             continue;
         }
 
-        // 解析设备名称（兼容旧版v4l2-ctl输出格式）
+        // 解析设备名称
         QString cardName = "Unknown USBIPD Camera";
         if (devInfo.contains("Card type"))
         {
@@ -206,116 +203,111 @@ void DeviceManageWidget::scan_audio_devices()
 selectedDeviceV4L2Params DeviceManageWidget::parseV4L2Params(const QString &devicePath)
 {
     selectedDeviceV4L2Params params;
-    // 1. 初始化设备路径
     params.selectedVideoDevice = devicePath;
-    // 默认像素格式先设为YUYV（你指定的默认值）
-    params.supportPixFmt = V4L2_PIX_FMT_YUYV;
 
-    // 2. 执行v4l2-ctl命令获取详细格式信息（关键：--list-formats-ext）
+    // 1. 执行命令
     QString cmdOutput = execute_command("v4l2-ctl",
         QStringList() << "--device=" + devicePath << "--list-formats-ext",
-        8000); // 延长超时适配USBIPD设备
+        8000);
 
-    if (cmdOutput.isEmpty()) {
-        // 兜底默认参数
-        params.defaultParams = V4L2Params();
-        params.supportRes.append(QSize(640, 480));
-        params.supportFps.append(30);
-        return params;
-    }
+    // 临时容器：用于分类存储，保证 YUYV 排在最前面
+    QList<V4L2Params> yuyvList;
+    QList<V4L2Params> mjpgList;
+    QList<V4L2Params> otherList;
 
-    // 3. 解析像素格式（优先找YUYV，其次MJPEG）
+    // 状态机
+    uint32_t currentFmt = 0;
+    QSize currentRes;
+    bool isParsingFmt = false;
+
+    // 正则
     QRegularExpression pixFmtRegex(R"(Pixel Format: '(\w+)' \((\w+)\))");
-    QRegularExpressionMatchIterator fmtIt = pixFmtRegex.globalMatch(cmdOutput);
-    while (fmtIt.hasNext()) {
-        QRegularExpressionMatch fmtMatch = fmtIt.next();
-        QString fmtCode = fmtMatch.captured(1);
-        // 匹配YUYV/MJPEG/H264等格式
-        if (fmtCode == "YUYV") {
-            params.supportPixFmt = V4L2_PIX_FMT_YUYV;
-            break; // 优先YUYV，找到就退出
-        } else if (fmtCode == "MJPG" && params.supportPixFmt == V4L2_PIX_FMT_YUYV) {
-            params.supportPixFmt = V4L2_PIX_FMT_MJPEG; // 备选MJPEG
-        } else if (fmtCode == "H264" && params.supportPixFmt == V4L2_PIX_FMT_YUYV) {
-            params.supportPixFmt = V4L2_PIX_FMT_H264; // 备选H264
-        }
-    }
-
-    // 4. 解析分辨率和对应帧率（核心逻辑）
-    // 正则匹配：Size: 1920x1080 或 Size: 640x480
     QRegularExpression resRegex(R"(Size: (\d+)x(\d+))");
-    // 正则匹配：Frame rate: 30.000 fps 或 Frame rate: 15 fps
     QRegularExpression fpsRegex(R"(Frame rate: (\d+)\.?\d* fps)");
 
-    QStringList lines = cmdOutput.split('\n');
-    QSize currentRes; // 临时存储当前解析的分辨率
-    bool inResBlock = false; // 标记是否在某个分辨率的帧率块内
+    if (!cmdOutput.isEmpty()) {
+        QStringList lines = cmdOutput.split('\n');
+        for (const QString &line : lines) {
+            QString trimLine = line.trimmed();
+            if (trimLine.isEmpty()) continue;
 
-    for (const QString &line : lines) {
-        QString trimLine = line.trimmed();
-        // 匹配分辨率
-        QRegularExpressionMatch resMatch = resRegex.match(trimLine);
-        if (resMatch.hasMatch()) {
-            // 上一个分辨率解析完成，重置标记
-            inResBlock = true;
-            int w = resMatch.captured(1).toInt();
-            int h = resMatch.captured(2).toInt();
-            currentRes = QSize(w, h);
-            // 去重添加分辨率
-            if (!params.supportRes.contains(currentRes)) {
-                params.supportRes.append(currentRes);
+            // --- 1. 匹配像素格式 ---
+            QRegularExpressionMatch fmtMatch = pixFmtRegex.match(trimLine);
+            if (fmtMatch.hasMatch()) {
+                QString fmtCode = fmtMatch.captured(1);
+                currentFmt = 0; // 重置
+                if (fmtCode == "YUYV") currentFmt = V4L2_PIX_FMT_YUYV;
+                else if (fmtCode == "MJPG") currentFmt = V4L2_PIX_FMT_MJPEG;
+                else if (fmtCode == "H264") currentFmt = V4L2_PIX_FMT_H264;
+                else if (fmtCode == "NV12") currentFmt = V4L2_PIX_FMT_NV12;
+
+                isParsingFmt = (currentFmt != 0);
+                currentRes = QSize();
+                continue;
             }
-            continue;
-        }
 
-        // 匹配帧率（仅在分辨率块内）
-        if (inResBlock && !currentRes.isNull()) {
+            if (!isParsingFmt) continue;
+
+            // --- 2. 匹配分辨率 ---
+            QRegularExpressionMatch resMatch = resRegex.match(trimLine);
+            if (resMatch.hasMatch()) {
+                currentRes = QSize(resMatch.captured(1).toInt(), resMatch.captured(2).toInt());
+                continue;
+            }
+
+            if (currentRes.isNull()) continue;
+
+            // --- 3. 匹配帧率并分类存储 ---
             QRegularExpressionMatch fpsMatch = fpsRegex.match(trimLine);
             if (fpsMatch.hasMatch()) {
                 int fps = fpsMatch.captured(1).toInt();
-                // 帧率非0且去重
-                if (fps > 0 && !params.supportFps.contains(fps)) {
-                    params.supportFps.append(fps);
+                if (fps > 0) {
+                    V4L2Params p;
+                    p.pixFmt = currentFmt;
+                    p.width = currentRes.width();
+                    p.height = currentRes.height();
+                    p.fps = fps;
+
+                    // 根据格式分类放入不同的临时 list
+                    if (currentFmt == V4L2_PIX_FMT_YUYV) {
+                        yuyvList.append(p);
+                    } else if (currentFmt == V4L2_PIX_FMT_MJPEG) {
+                        mjpgList.append(p);
+                    } else {
+                        otherList.append(p);
+                    }
                 }
             }
         }
+    }
 
-        // 遇到空行/新格式块，退出当前分辨率块
-        if (trimLine.isEmpty() || trimLine.startsWith("Pixel Format")) {
-            inResBlock = false;
-            currentRes = QSize();
+    // ========== 修改点 3：合并 List (确保优先级) ==========
+    // 这里的顺序决定了谁是默认参数： YUYV -> MJPG -> Other
+    // 利用 C++11 的 range-based for 循环去重合并 (或者直接 append 后再整体去重，这里简化处理)
+
+    // 先清空，防止有脏数据
+    params.validParamList.clear();
+
+    // 定义一个 lambda 帮助去重合并
+    auto mergeList = [&](const QList<V4L2Params> &source) {
+        for (const V4L2Params &p : source) {
+            bool exists = false;
+            for (const V4L2Params &ep : params.validParamList) {
+                if (ep.isSameAs(p)) { exists = true; break; }
+            }
+            if (!exists) params.validParamList.append(p);
         }
-    }
+    };
 
-    // 5. 设置默认参数（优先选第一个分辨率+第一个帧率，兜底640x480）
-    params.defaultParams = V4L2Params();
-    // 分辨率默认值
-    if (!params.supportRes.isEmpty()) {
-        params.defaultParams.width = params.supportRes.first().width();
-        params.defaultParams.height = params.supportRes.first().height();
-    }
-    // 帧率默认值
-    if (!params.supportFps.isEmpty()) {
-        params.defaultParams.fps = params.supportFps.first();
-    }
-    // 像素格式默认值（同步已解析的supportPixFmt）
-    params.defaultParams.pixFmt = params.supportPixFmt;
+    mergeList(yuyvList); // 最高优先级
+    mergeList(mjpgList); // 次优先级
+    mergeList(otherList);
 
-    // 6. 兜底：如果解析结果为空，补充基础值
-    if (params.supportRes.isEmpty()) {
-        params.supportRes.append(QSize(640, 480));
-        params.supportRes.append(QSize(1280, 720));
+    // ========== 修改点 4：最终兜底 (绝对保证 List 不为空) ==========
+    if (params.validParamList.isEmpty()) {
+        qWarning() << "[parseV4L2Params] 无法读取设备参数，使用硬编码默认值";
+        params.validParamList.append(V4L2Params()); // 加入默认构造的 640x480 YUYV
     }
-    if (params.supportFps.isEmpty()) {
-        params.supportFps.append(15);
-        params.supportFps.append(30);
-    }
-
-    qDebug() << "[parseV4L2Params] 解析完成:"
-             << "设备=" << devicePath
-             << "默认分辨率=" << params.defaultParams.width << "x" << params.defaultParams.height
-             << "默认帧率=" << params.defaultParams.fps
-             << "像素格式=" << (params.supportPixFmt == V4L2_PIX_FMT_YUYV ? "YUYV" : "MJPEG");
 
     return params;
 }

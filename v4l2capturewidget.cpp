@@ -24,6 +24,13 @@ V4L2CaptureWidget::~V4L2CaptureWidget()
     }
 }
 
+void V4L2CaptureWidget::set_select_device(const selectedDeviceV4L2Params &newCurrentVideoDeviceParams, const QString &audioDevice)
+{
+    currentVideoDeviceParams = newCurrentVideoDeviceParams;
+    selected_audio_device = audioDevice;
+    this->update_video_params();
+}
+
 void V4L2CaptureWidget::initVideoLabel()
 {
     if (this->videoLabel)
@@ -104,6 +111,34 @@ QImage V4L2CaptureWidget::convertYuyvToRgb(const uchar *data, int width, int hei
     return image;
 }
 
+QString V4L2CaptureWidget::getPixFmtString(uint32_t pixFmt)
+{
+    // 常见像素格式的映射
+    switch (pixFmt) {
+        case V4L2_PIX_FMT_YUYV:
+            return "YUYV";
+        case V4L2_PIX_FMT_MJPEG:
+            return "MJPEG";
+        case V4L2_PIX_FMT_H264:
+            return "H.264";
+        case V4L2_PIX_FMT_YUV420:
+            return "YUV420";
+        case V4L2_PIX_FMT_NV12:
+            return "NV12";
+        case V4L2_PIX_FMT_RGB24:
+            return "RGB24";
+        default: {
+            // 将 FourCC 码转换为字符串
+            char fmt[5] = {0};
+            fmt[0] = (pixFmt >> 0) & 0xFF;
+            fmt[1] = (pixFmt >> 8) & 0xFF;
+            fmt[2] = (pixFmt >> 16) & 0xFF;
+            fmt[3] = (pixFmt >> 24) & 0xFF;
+            return QString("Unknown (%1)").arg(QString::fromLatin1(fmt));
+        }
+    }
+}
+
 void V4L2CaptureWidget::updateVideoFrame(const uchar *yuyvData, int width, int height)
 {
     if (!this->videoLabel)
@@ -123,6 +158,19 @@ void V4L2CaptureWidget::updateVideoFrame(const uchar *yuyvData, int width, int h
     // 显示图像
     this->videoLabel->setPixmap(scaledPixmap);
     this->videoLabel->show();
+}
+
+void V4L2CaptureWidget::update_video_params()
+{
+    this->ui->comboBox_video_params->clear();
+    for(int i = 0;i<this->currentVideoDeviceParams.validParamList.size();i++){
+        this->ui->comboBox_video_params->addItem(QString("分辨率：%1x%2  帧率：%3  格式：%4")
+                                                 .arg(this->currentVideoDeviceParams.validParamList.at(i).width)
+                                                 .arg(this->currentVideoDeviceParams.validParamList.at(i).height)
+                                                 .arg(this->currentVideoDeviceParams.validParamList.at(i).fps)
+                                                 .arg(this->getPixFmtString(this->currentVideoDeviceParams.validParamList.at(i).pixFmt)));
+    }
+    this->ui->comboBox_video_params->setCurrentIndex(0);
 }
 
 QString V4L2CaptureWidget::format_v4l2_error(const QString &operation, int err_code)
@@ -156,7 +204,7 @@ void V4L2CaptureWidget::startPreviewThread()
     }
 
     this->previewThread->setV4l2Fd(v4l2_fd);
-    V4L2Params params = this->currentVideoDeviceParams.defaultParams;
+    V4L2Params params = this->currentVideoDeviceParams.validParamList.at(0);
     this->previewThread->setParams(params);
 
     this->previewThread->start();

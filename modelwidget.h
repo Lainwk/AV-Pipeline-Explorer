@@ -10,24 +10,28 @@
 #include <errno.h>      // errno
 #include <string.h>     // strerror
 #include <QFrame>
+#include <QMap>
 // V4L2参数结构体
 struct V4L2Params {
     int width = 640;               // 默认宽度
     int height = 480;              // 默认高度
     int fps = 30;                  // 默认帧率
     uint32_t pixFmt = V4L2_PIX_FMT_YUYV; // 默认像素格式
+
+    bool isSameAs(const V4L2Params &other) const {
+            return width == other.width && height == other.height &&
+                   fps == other.fps && pixFmt == other.pixFmt;
+    }
 };
 
 struct selectedDeviceV4L2Params {
-    QString selectedVideoDevice;          // 设备路径（/dev/videoX）
-    QList<QSize> supportRes;              // 支持的分辨率列表
-    QList<int> supportFps;                // 对应分辨率的帧率列表
-    V4L2Params defaultParams;             // 默认采集参数（启动时用）
-    uint32_t supportPixFmt = V4L2_PIX_FMT_YUYV; // 支持的像素格式（优先YUYV）
+    QString selectedVideoDevice;
+    QList<V4L2Params> validParamList; // 约定：index 0 即为默认参数
 };
 
 // 新增：注册自定义类型，让Qt识别
 Q_DECLARE_METATYPE(selectedDeviceV4L2Params);
+Q_DECLARE_METATYPE(V4L2Params)
 // 若传递列表，额外注册列表类型
 Q_DECLARE_METATYPE(QList<selectedDeviceV4L2Params>);
 
@@ -38,7 +42,7 @@ public:
     explicit ModelWidget(QWidget *parent = nullptr);
 
 public slots:
-    void set_select_device(const selectedDeviceV4L2Params &newCurrentVideoDeviceParams, const QString &audioDevice);
+    virtual void set_select_device(const selectedDeviceV4L2Params &newCurrentVideoDeviceParams, const QString &audioDevice);
 
 signals:
     void add_Logs(const QString &message);
