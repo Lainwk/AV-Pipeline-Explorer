@@ -23,21 +23,7 @@
       <item>
        <widget class="QPushButton" name="pushButton_open_close_device">
         <property name="text">
-         <string>1. 打开/关闭设备</string>
-        </property>
-       </widget>
-      </item>
-      <item>
-       <widget class="QPushButton" name="pushButton_query_cap">
-        <property name="text">
-         <string>2. 查询设备能力</string>
-        </property>
-       </widget>
-      </item>
-      <item>
-       <widget class="QPushButton" name="pushButton_set_format">
-        <property name="text">
-         <string>3. 设置采集格式</string>
+         <string> 打开/关闭设备</string>
         </property>
        </widget>
       </item>
@@ -47,7 +33,7 @@
          <bool>false</bool>
         </property>
         <property name="text">
-         <string>4. 开始采集</string>
+         <string>开始采集</string>
         </property>
        </widget>
       </item>
@@ -57,7 +43,7 @@
          <bool>false</bool>
         </property>
         <property name="text">
-         <string>5. 停止采集</string>
+         <string>停止采集</string>
         </property>
        </widget>
       </item>
@@ -67,7 +53,7 @@
          <bool>false</bool>
         </property>
         <property name="text">
-         <string>6. 捕获单帧</string>
+         <string> 捕获单帧</string>
         </property>
        </widget>
       </item>

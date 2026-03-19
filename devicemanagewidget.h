@@ -34,13 +34,13 @@ private:
 
 
 private slots:
-    void on_scan_button_clicked();
+    void scan_button_clicked();
 
-    void on_video_device_double_clicked(QTreeWidgetItem *item, int column);
-    void on_audio_device_double_clicked(QTreeWidgetItem *item, int column);
+    void video_device_double_clicked(QTreeWidgetItem *item, int column);
+    void audio_device_double_clicked(QTreeWidgetItem *item, int column);
 
-    void on_test_video_button_clicked();
-    void on_test_audio_button_clicked();
+    void test_video_button_clicked();
+    void test_audio_button_clicked();
 
 
 signals:

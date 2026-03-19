@@ -311,3 +311,5 @@ void V4L2PreviewThread::stop_V4L2_Stream()
     emit this->add_Logs("[V4L2PreviewThread][Success] stop V4L2 stream success");
 
 }
+
+

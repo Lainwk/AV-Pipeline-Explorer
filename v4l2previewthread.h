@@ -61,6 +61,7 @@ private:
     // 停止V4L2流采集
     void stop_V4L2_Stream();
 
+
 signals:
     // 预览图像发送给UI线程
     void previewImageReady(const uchar *data, int width, int height);

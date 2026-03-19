@@ -69,6 +69,8 @@ void V4L2CaptureWidget::init_connect()
     connect(this->previewThread, &V4L2PreviewThread::previewImageReady,
             this, &V4L2CaptureWidget::updateVideoFrame,
             Qt::QueuedConnection);
+    connect(this->ui->comboBox_video_params,&QComboBox::currentIndexChanged,
+            this,&V4L2CaptureWidget::onVideoParamsComBoboxChanged);
 }
 
 
@@ -162,7 +164,11 @@ void V4L2CaptureWidget::updateVideoFrame(const uchar *yuyvData, int width, int h
 
 void V4L2CaptureWidget::update_video_params()
 {
-    this->ui->comboBox_video_params->clear();
+    bool oldState = this->ui->comboBox_video_params->blockSignals(true);
+    if(this->ui->comboBox_video_params->count()>0){
+        this->ui->comboBox_video_params->clear();
+    }
+
     for(int i = 0;i<this->currentVideoDeviceParams.validParamList.size();i++){
         this->ui->comboBox_video_params->addItem(QString("分辨率：%1x%2  帧率：%3  格式：%4")
                                                  .arg(this->currentVideoDeviceParams.validParamList.at(i).width)
@@ -171,6 +177,20 @@ void V4L2CaptureWidget::update_video_params()
                                                  .arg(this->getPixFmtString(this->currentVideoDeviceParams.validParamList.at(i).pixFmt)));
     }
     this->ui->comboBox_video_params->setCurrentIndex(0);
+    this->ui->comboBox_video_params->blockSignals(oldState);
+
+}
+
+void V4L2CaptureWidget::onVideoParamsComBoboxChanged(int index)
+{
+    if(this->ui->pushButton_open_close_device->property("device_state").toBool()){
+        this->add_local_logs("[V4L2CaptureWidget][Operation] reset video params fail, please close device before reset");
+        this->ui->comboBox_video_params->setCurrentIndex(this->lastParamsComboboxIndex);
+    } else {
+        this->lastParamsComboboxIndex = index;
+        this->add_local_logs("[V4L2CaptureWidget][Operation] reset video params success");
+        this->previewThread->setParams(this->currentVideoDeviceParams.validParamList.at(index));
+    }
 }
 
 QString V4L2CaptureWidget::format_v4l2_error(const QString &operation, int err_code)

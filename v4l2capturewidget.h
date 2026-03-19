@@ -11,7 +11,7 @@
 #include <QLabel>
 #include <QImage>
 #include <QPixmap>
-
+#include <QComboBox>
 #include "v4l2previewthread.h"
 
 namespace Ui
@@ -28,7 +28,7 @@ public:
     ~V4L2CaptureWidget();
 
 public slots:
-    void set_select_device(const selectedDeviceV4L2Params &newCurrentVideoDeviceParams, const QString &audioDevice);
+    void set_select_device(const selectedDeviceV4L2Params &newCurrentVideoDeviceParams, const QString &audioDevice) override;
 
 private:
     Ui::V4L2CaptureWidget *ui;
@@ -37,6 +37,7 @@ private:
     V4L2PreviewThread *previewThread;
     int v4l2_fd = -1;
     bool isVideoLabelInitialized = false;
+    int lastParamsComboboxIndex = 0;
 
     QString format_v4l2_error(const QString &operation, int err_code);
     void startPreviewThread();
@@ -51,6 +52,7 @@ private slots:
     void add_local_logs(const QString &logMessage);
     void updateVideoFrame(const uchar *yuyvData, int width, int height);
     void update_video_params();
+    void onVideoParamsComBoboxChanged(int index);
 
 protected:
     void init_connect();

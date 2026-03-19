@@ -18,15 +18,15 @@ DeviceManageWidget::~DeviceManageWidget()
 void DeviceManageWidget::init_connect()
 {
     connect(this->ui->scanButton,&QPushButton::clicked,
-            this,&DeviceManageWidget::on_scan_button_clicked);
+            this,&DeviceManageWidget::scan_button_clicked);
     connect(this->ui->videoDeviceTree,&QTreeWidget::itemDoubleClicked,
-            this,&DeviceManageWidget::on_video_device_double_clicked);
+            this,&DeviceManageWidget::video_device_double_clicked);
     connect(this->ui->audioDeviceTree,&QTreeWidget::itemDoubleClicked,
-            this,&DeviceManageWidget::on_audio_device_double_clicked);
+            this,&DeviceManageWidget::audio_device_double_clicked);
     connect(this->ui->testVideoButton,&QPushButton::clicked,
-            this,&DeviceManageWidget::on_test_video_button_clicked);
+            this,&DeviceManageWidget::test_video_button_clicked);
     connect(this->ui->testAudioButton,&QPushButton::clicked,
-            this,&DeviceManageWidget::on_test_audio_button_clicked);
+            this,&DeviceManageWidget::test_audio_button_clicked);
 
 }
 
@@ -98,11 +98,10 @@ void DeviceManageWidget::scan_video_devices()
         item->setText(2, "to test");
         item->setData(0, Qt::UserRole, devicePath);
 
-        //emit this->add_Logs(QString("[DeviceManageWidget]find valid USBIPD video device: %1").arg(displayText));
     }
 
     int validDeviceCount = ui->videoDeviceTree->topLevelItemCount();
-    emit this->add_Logs(QString("[DeviceManageWidget]total find valid USBIPD video devices: %1").arg(validDeviceCount));
+    emit this->add_Logs(QString("[DeviceManageWidget]total find video devices: %1").arg(validDeviceCount));
 }
 
 void DeviceManageWidget::scan_audio_devices()
@@ -200,6 +199,7 @@ void DeviceManageWidget::scan_audio_devices()
     emit this->add_Logs(QString("[DeviceManageWidget]total find %1 audio devices").arg(ui->audioDeviceTree->topLevelItemCount()));
 }
 
+
 selectedDeviceV4L2Params DeviceManageWidget::parseV4L2Params(const QString &devicePath)
 {
     selectedDeviceV4L2Params params;
@@ -215,15 +215,15 @@ selectedDeviceV4L2Params DeviceManageWidget::parseV4L2Params(const QString &devi
     QList<V4L2Params> mjpgList;
     QList<V4L2Params> otherList;
 
-    // 状态机
+    // 状态变量
     uint32_t currentFmt = 0;
     QSize currentRes;
-    bool isParsingFmt = false;
+    double currentInterval = 0.0; // 用于计算fps
 
-    // 正则
-    QRegularExpression pixFmtRegex(R"(Pixel Format: '(\w+)' \((\w+)\))");
-    QRegularExpression resRegex(R"(Size: (\d+)x(\d+))");
-    QRegularExpression fpsRegex(R"(Frame rate: (\d+)\.?\d* fps)");
+    // 正则表达式 - 已修正以匹配实际输出
+    QRegularExpression fmtRegex(R"(\[\d+\]:\s*'(\w+)'\s*\([^)]+\))");
+    QRegularExpression resRegex(R"(Size:\s*Discrete\s*(\d+)x(\d+))");
+    QRegularExpression intervalRegex(R"(Interval:\s*Discrete\s*([\d.]+)s\s*\(([\d.]+)\s*fps\))");
 
     if (!cmdOutput.isEmpty()) {
         QStringList lines = cmdOutput.split('\n');
@@ -231,8 +231,8 @@ selectedDeviceV4L2Params DeviceManageWidget::parseV4L2Params(const QString &devi
             QString trimLine = line.trimmed();
             if (trimLine.isEmpty()) continue;
 
-            // --- 1. 匹配像素格式 ---
-            QRegularExpressionMatch fmtMatch = pixFmtRegex.match(trimLine);
+            // --- 1. 匹配像素格式（例如：[0]: 'MJPG' (Motion-JPEG, compressed)）---
+            QRegularExpressionMatch fmtMatch = fmtRegex.match(trimLine);
             if (fmtMatch.hasMatch()) {
                 QString fmtCode = fmtMatch.captured(1);
                 currentFmt = 0; // 重置
@@ -240,27 +240,24 @@ selectedDeviceV4L2Params DeviceManageWidget::parseV4L2Params(const QString &devi
                 else if (fmtCode == "MJPG") currentFmt = V4L2_PIX_FMT_MJPEG;
                 else if (fmtCode == "H264") currentFmt = V4L2_PIX_FMT_H264;
                 else if (fmtCode == "NV12") currentFmt = V4L2_PIX_FMT_NV12;
-
-                isParsingFmt = (currentFmt != 0);
-                currentRes = QSize();
+                // 可以继续添加其他格式
+                currentRes = QSize(); // 重置分辨率
+                currentInterval = 0.0;
                 continue;
             }
 
-            if (!isParsingFmt) continue;
-
-            // --- 2. 匹配分辨率 ---
+            // --- 2. 匹配分辨率（例如：Size: Discrete 1280x720）---
             QRegularExpressionMatch resMatch = resRegex.match(trimLine);
             if (resMatch.hasMatch()) {
                 currentRes = QSize(resMatch.captured(1).toInt(), resMatch.captured(2).toInt());
                 continue;
             }
 
-            if (currentRes.isNull()) continue;
-
-            // --- 3. 匹配帧率并分类存储 ---
-            QRegularExpressionMatch fpsMatch = fpsRegex.match(trimLine);
-            if (fpsMatch.hasMatch()) {
-                int fps = fpsMatch.captured(1).toInt();
+            // --- 3. 匹配帧间隔和帧率（例如：Interval: Discrete 0.033s (30.000 fps)）---
+            QRegularExpressionMatch intervalMatch = intervalRegex.match(trimLine);
+            if (intervalMatch.hasMatch() && !currentRes.isNull() && currentFmt != 0) {
+                // 我们可以直接从匹配中获取fps
+                int fps = qRound(intervalMatch.captured(2).toDouble());
                 if (fps > 0) {
                     V4L2Params p;
                     p.pixFmt = currentFmt;
@@ -281,14 +278,7 @@ selectedDeviceV4L2Params DeviceManageWidget::parseV4L2Params(const QString &devi
         }
     }
 
-    // ========== 修改点 3：合并 List (确保优先级) ==========
-    // 这里的顺序决定了谁是默认参数： YUYV -> MJPG -> Other
-    // 利用 C++11 的 range-based for 循环去重合并 (或者直接 append 后再整体去重，这里简化处理)
-
-    // 先清空，防止有脏数据
-    params.validParamList.clear();
-
-    // 定义一个 lambda 帮助去重合并
+    // 合并列表 (确保优先级: YUYV -> MJPG -> Other)
     auto mergeList = [&](const QList<V4L2Params> &source) {
         for (const V4L2Params &p : source) {
             bool exists = false;
@@ -299,11 +289,11 @@ selectedDeviceV4L2Params DeviceManageWidget::parseV4L2Params(const QString &devi
         }
     };
 
-    mergeList(yuyvList); // 最高优先级
-    mergeList(mjpgList); // 次优先级
+    mergeList(yuyvList);
+    mergeList(mjpgList);
     mergeList(otherList);
 
-    // ========== 修改点 4：最终兜底 (绝对保证 List 不为空) ==========
+    // 最终兜底 (绝对保证 List 不为空)
     if (params.validParamList.isEmpty()) {
         qWarning() << "[parseV4L2Params] 无法读取设备参数，使用硬编码默认值";
         params.validParamList.append(V4L2Params()); // 加入默认构造的 640x480 YUYV
@@ -313,7 +303,7 @@ selectedDeviceV4L2Params DeviceManageWidget::parseV4L2Params(const QString &devi
 }
 
 
-void DeviceManageWidget::on_scan_button_clicked()
+void DeviceManageWidget::scan_button_clicked()
 {
     emit this->add_Logs("[DeviceManageWidget]start scan device");
 
@@ -329,7 +319,7 @@ void DeviceManageWidget::on_scan_button_clicked()
 
     // 更新设备总数
     int totalDevices = ui->videoDeviceTree->topLevelItemCount() +
-            ui->audioDeviceTree->topLevelItemCount();
+                        ui->audioDeviceTree->topLevelItemCount();
     ui->deviceCountValue->setText(QString::number(totalDevices));
 
     // 收集设备列表
@@ -373,13 +363,18 @@ void DeviceManageWidget::on_scan_button_clicked()
         audioDeviceIdList.append(deviceId);
     }
 
+    if(videoDeviceParamsList.isEmpty())
+    {
+        qDebug()<<"scan no deivce";
+        return;
+    }
     emit this->set_scaned_devices(videoDeviceList,audioDeviceList,videoDevicePathList,audioDeviceIdList,videoDeviceParamsList);
     // 完成
     emit this->add_Logs("[DeviceManageWidget]scan device over");
 
 }
 
-void DeviceManageWidget::on_video_device_double_clicked(QTreeWidgetItem *item, int column)
+void DeviceManageWidget::video_device_double_clicked(QTreeWidgetItem *item, int column)
 {
     Q_UNUSED(column);
 
@@ -431,7 +426,7 @@ void DeviceManageWidget::on_video_device_double_clicked(QTreeWidgetItem *item, i
 
 }
 
-void DeviceManageWidget::on_audio_device_double_clicked(QTreeWidgetItem *item, int column)
+void DeviceManageWidget::audio_device_double_clicked(QTreeWidgetItem *item, int column)
 {
     Q_UNUSED(column);
 
@@ -482,7 +477,7 @@ void DeviceManageWidget::on_audio_device_double_clicked(QTreeWidgetItem *item, i
 
 }
 
-void DeviceManageWidget::on_test_video_button_clicked()
+void DeviceManageWidget::test_video_button_clicked()
 {
     if(this->currentVideoDeviceParams.selectedVideoDevice.isEmpty()){
         this->add_Logs("[DeviceManageWidget]no video device selected");
@@ -512,7 +507,6 @@ void DeviceManageWidget::on_test_video_button_clicked()
         return;
     }
 
-    // ========== 核心修改：移除input_timeout，适配旧版FFmpeg ==========
     auto runFFmpegTest = [&]() -> bool {
         QProcess ffmpegProcess;
         QProcessEnvironment env = QProcessEnvironment::systemEnvironment();
@@ -597,7 +591,7 @@ void DeviceManageWidget::on_test_video_button_clicked()
     }
 }
 
-void DeviceManageWidget::on_test_audio_button_clicked()
+void DeviceManageWidget::test_audio_button_clicked()
 {
     // 1. 检查是否选中音频设备
     if (this->selected_audio_device.isEmpty()) {

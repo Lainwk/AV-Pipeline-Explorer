@@ -4,6 +4,8 @@
 #include <QMainWindow>
 #include <QDebug>
 #include <QDateTime>
+#include <QFileDialog>
+#include <QDir>
 
 //other widget
 #include "modelwidget.h"
@@ -33,6 +35,7 @@ private:
     //function
     void init_subpage();
     void init_connect();
+    void ensureDefaultStorageDirExists();
 
 private slots:
     void on_navigation_item_clicked(int index);    //change page
@@ -51,6 +54,8 @@ private slots:
                            const QStringList &videoDevicePathList,
                            const QStringList & audioDeviceIdList,
                            const QList<selectedDeviceV4L2Params> &videoDeviceParamsList);
+
+    void setOutputPath();
 
 signals:
     void set_current_device(const selectedDeviceV4L2Params &videoParams, const QString &audioDevice);

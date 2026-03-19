@@ -8,7 +8,8 @@ MainWindow::MainWindow(QWidget *parent)
 {
     ui->setupUi(this);
 
-    this->add_logs("[System]system init");
+    this->add_logs("[QMainWindow][System] system init");
+    this->ensureDefaultStorageDirExists();
 
     //initpages
     this->init_subpage();
@@ -67,6 +68,9 @@ void MainWindow::init_connect()
     connect(this->ui->clearLogButton,&QPushButton::clicked,
             this,&MainWindow::on_clear_log_botton_clicked);
 
+    connect(this->ui->browseButton,&QPushButton::clicked,
+            this,&MainWindow::setOutputPath);
+
 
     //other page signal
     //page logs
@@ -78,12 +82,42 @@ void MainWindow::init_connect()
     connect(this,&MainWindow::set_current_device,
             this->device_manage_page,&ModelWidget::set_select_device);
     connect(this,&MainWindow::set_current_device,
-            this->V4L2_capture_page,&ModelWidget::set_select_device);
+            this->V4L2_capture_page,&V4L2CaptureWidget::set_select_device);
 
     // 替换DeviceManageWidget的set_scaned_devices信号连接（需同步修改DeviceManageWidget的信号）
     connect(this->device_manage_page,&DeviceManageWidget::set_scaned_devices,
             this,&MainWindow::set_scaned_device);
 
+}
+
+void MainWindow::ensureDefaultStorageDirExists()
+{
+    // 1. 获取当前可执行文件所在的目录路径
+    QString appDir = QCoreApplication::applicationDirPath();
+    QDir baseDir(appDir);
+
+    // 2. 拼接目标子文件夹名称
+    QString folderName = "DefaultOutput";
+    QString fullPath = baseDir.absoluteFilePath(folderName);
+
+    QDir targetDir(fullPath);
+
+    // 3. 检查文件夹是否存在
+    if (targetDir.exists()) {
+        qDebug() << "目录已存在:" << fullPath;
+    }
+
+    // 4. 文件夹不存在，尝试创建
+    qDebug() << "目录不存在，尝试创建:" << fullPath;
+    // mkpath 会递归创建所有不存在的父目录，成功返回true
+    if (baseDir.mkpath(folderName)) {
+        qDebug() << "目录创建成功:" << fullPath;
+        this->ui->outputPathEdit->setText(fullPath);
+        this->add_logs("[MainWindow][Success] init default output path success");
+    } else {
+        qWarning() << "目录创建失败:" << fullPath;
+    }
+    return;
 }
 
 void MainWindow::on_navigation_item_clicked(int index)
@@ -131,12 +165,14 @@ void MainWindow::on_select_device_change(int index)
     QVariant var = this->ui->videoDeviceCombo->currentData();
     devParams = var.value<selectedDeviceV4L2Params>();
 
+//    qDebug()<<devParams.selectedVideoDevice;
     // 发送结构体信号
     emit this->set_current_device(devParams, audioDev);
 
     this->add_logs(QString("[Setting]current video device:%1, current audio device:%2")
                    .arg(this->ui->videoDeviceCombo->currentText())
                    .arg(this->ui->audioDeviceCombo->currentText()));
+
 }
 
 
@@ -186,5 +222,17 @@ void MainWindow::set_scaned_device(const QStringList &videoDeviceList,
     this->add_logs(QString("[Setting]current video device:%1, current audio device:%2")
                    .arg(this->ui->videoDeviceCombo->currentText())
                    .arg(this->ui->audioDeviceCombo->currentText()));
+}
+
+void MainWindow::setOutputPath()
+{
+    QString dirPath = QFileDialog::getExistingDirectory(this,"选择目录",".",QFileDialog::ShowDirsOnly | QFileDialog::DontResolveSymlinks);
+    if(dirPath.isEmpty()){
+        this->add_logs("[MainWindow][Operation] set output path fail");
+        return;
+    }
+    this->ui->outputPathEdit->clear();
+    this->ui->outputPathEdit->setText(dirPath);
+    this->add_logs(QString("[MainWindow][Operation] current output path:%1").arg(this->ui->outputPathEdit->text()));
 }
 
