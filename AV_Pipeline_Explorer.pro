@@ -32,14 +32,16 @@ SOURCES += \
     mainwindow.cpp \
     modelwidget.cpp \
     v4l2capturewidget.cpp \
-    v4l2previewthread.cpp
+    v4l2previewthread.cpp \
+    v4l2recordthread.cpp
 
 HEADERS += \
     devicemanagewidget.h \
     mainwindow.h \
     modelwidget.h \
     v4l2capturewidget.h \
-    v4l2previewthread.h
+    v4l2previewthread.h \
+    v4l2recordthread.h
 
 FORMS += \
     devicemanagewidget.ui \

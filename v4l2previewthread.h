@@ -16,8 +16,7 @@
 #include <modelwidget.h>
 #include <sys/select.h>
 #include <QString>
-
-
+#include <QDebug>
 
 class V4L2PreviewThread : public QThread
 {
@@ -50,8 +49,6 @@ private:
     int bufferCount = 0;            // 缓冲区数量
     V4L2Params params;              // 视频采集参数
 
-
-
     bool init_V4L2_Buffers();
     void release_V4L2_Buffers();
     // 设置V4L2采集格式和帧率
@@ -64,11 +61,14 @@ private:
 
 signals:
     // 预览图像发送给UI线程
-    void previewImageReady(const uchar *data, int width, int height);
+    void previewImageReady(const uchar *Data, int size,int width, int height);
+
 
     // add logs
     void add_Logs(const QString &logmessage);
 
+    //params warning
+    void paramsWarning(const QString &title,const QString &message);
 };
 
 #endif // V4L2PREVIEWTHREAD_H

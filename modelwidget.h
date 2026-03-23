@@ -11,6 +11,8 @@
 #include <string.h>     // strerror
 #include <QFrame>
 #include <QMap>
+#include <QMessageBox>
+
 // V4L2参数结构体
 struct V4L2Params {
     int width = 640;               // 默认宽度
@@ -26,13 +28,12 @@ struct V4L2Params {
 
 struct selectedDeviceV4L2Params {
     QString selectedVideoDevice;
-    QList<V4L2Params> validParamList; // 约定：index 0 即为默认参数
+    QList<V4L2Params> validParamList;
 };
 
-// 新增：注册自定义类型，让Qt识别
+// 注册自定义类型
 Q_DECLARE_METATYPE(selectedDeviceV4L2Params);
 Q_DECLARE_METATYPE(V4L2Params)
-// 若传递列表，额外注册列表类型
 Q_DECLARE_METATYPE(QList<selectedDeviceV4L2Params>);
 
 class ModelWidget : public QWidget
@@ -40,17 +41,49 @@ class ModelWidget : public QWidget
     Q_OBJECT
 public:
     explicit ModelWidget(QWidget *parent = nullptr);
+    QString getPixFmtString(uint32_t pixFmt){
+        // 常见像素格式的映射
+        switch (pixFmt) {
+            case V4L2_PIX_FMT_YUYV:
+                return "YUYV";
+            case V4L2_PIX_FMT_MJPEG:
+                return "MJPEG";
+            case V4L2_PIX_FMT_H264:
+                return "H.264";
+            case V4L2_PIX_FMT_YUV420:
+                return "YUV420";
+            case V4L2_PIX_FMT_NV12:
+                return "NV12";
+            case V4L2_PIX_FMT_RGB24:
+                return "RGB24";
+            default: {
+                // 将 FourCC 码转换为字符串
+                char fmt[5] = {0};
+                fmt[0] = (pixFmt >> 0) & 0xFF;
+                fmt[1] = (pixFmt >> 8) & 0xFF;
+                fmt[2] = (pixFmt >> 16) & 0xFF;
+                fmt[3] = (pixFmt >> 24) & 0xFF;
+                return QString("Unknown (%1)").arg(QString::fromLatin1(fmt));
+            }
+        }
+    }
+
+    void setCurrentOutputPath(const QString &newCurrentOutputPath);
 
 public slots:
     virtual void set_select_device(const selectedDeviceV4L2Params &newCurrentVideoDeviceParams, const QString &audioDevice);
-
+    void showMessageBox(QWidget* parent,const QString &title, const QString &message);
+    void showWarningBox(QWidget* parent,const QString &title, const QString &message);
 signals:
     void add_Logs(const QString &message);
 
 protected:
     // 当前选中的设备
-    selectedDeviceV4L2Params currentVideoDeviceParams; // 新增：当前选中设备的V4L2参数
+    selectedDeviceV4L2Params currentVideoDeviceParams; // 当前选中设备的V4L2参数
     QString selected_audio_device;
+
+    // Path
+    QString currentOutputPath;
 
     virtual void init_connect() = 0;
     QString execute_command(const QString &command, const QStringList &arguments, int timeout = 10000)
@@ -87,6 +120,7 @@ protected:
 
         return allOutput;
     }
+
 
 
 };

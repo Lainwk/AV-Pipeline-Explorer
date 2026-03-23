@@ -14,6 +14,7 @@
 #include <QComboBox>
 #include "v4l2previewthread.h"
 
+
 namespace Ui
 {
     class V4L2CaptureWidget;
@@ -46,19 +47,18 @@ private:
 
     // YUYV转RGB方法
     QImage convertYuyvToRgb(const uchar *data, int width, int height);
-    QString getPixFmtString(uint32_t pixFmt);
+    QImage convertMjpegToRgb(const uchar *data,int size, int width, int height);
 private slots:
     void on_open_close_device_button_clicked();
     void add_local_logs(const QString &logMessage);
-    void updateVideoFrame(const uchar *yuyvData, int width, int height);
+    void updateVideoFrame(const uchar *yuyvData,int size, int width, int height);
     void update_video_params();
     void onVideoParamsComBoboxChanged(int index);
+    void showParamsWarnBox(const QString &title,const QString &message);
 
 protected:
-    void init_connect();
+    void init_connect() override;
 
-signals:
-    void sendYuyvFrame(const uchar *data, int width, int height);
 };
 
 #endif // V4L2CAPTUREWIDGET_H

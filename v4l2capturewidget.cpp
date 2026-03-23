@@ -65,12 +65,16 @@ void V4L2CaptureWidget::init_connect()
     connect(this->previewThread, &V4L2PreviewThread::add_Logs,
             this, &V4L2CaptureWidget::add_local_logs);
 
-    // 连接信号
     connect(this->previewThread, &V4L2PreviewThread::previewImageReady,
             this, &V4L2CaptureWidget::updateVideoFrame,
             Qt::QueuedConnection);
+
+    connect(this->previewThread, &V4L2PreviewThread::paramsWarning,
+            this,&V4L2CaptureWidget::showParamsWarnBox);
+
     connect(this->ui->comboBox_video_params,&QComboBox::currentIndexChanged,
             this,&V4L2CaptureWidget::onVideoParamsComBoboxChanged);
+
 }
 
 
@@ -113,43 +117,44 @@ QImage V4L2CaptureWidget::convertYuyvToRgb(const uchar *data, int width, int hei
     return image;
 }
 
-QString V4L2CaptureWidget::getPixFmtString(uint32_t pixFmt)
+QImage V4L2CaptureWidget::convertMjpegToRgb(const uchar *data,int size, int width, int height)
 {
-    // 常见像素格式的映射
-    switch (pixFmt) {
-        case V4L2_PIX_FMT_YUYV:
-            return "YUYV";
-        case V4L2_PIX_FMT_MJPEG:
-            return "MJPEG";
-        case V4L2_PIX_FMT_H264:
-            return "H.264";
-        case V4L2_PIX_FMT_YUV420:
-            return "YUV420";
-        case V4L2_PIX_FMT_NV12:
-            return "NV12";
-        case V4L2_PIX_FMT_RGB24:
-            return "RGB24";
-        default: {
-            // 将 FourCC 码转换为字符串
-            char fmt[5] = {0};
-            fmt[0] = (pixFmt >> 0) & 0xFF;
-            fmt[1] = (pixFmt >> 8) & 0xFF;
-            fmt[2] = (pixFmt >> 16) & 0xFF;
-            fmt[3] = (pixFmt >> 24) & 0xFF;
-            return QString("Unknown (%1)").arg(QString::fromLatin1(fmt));
-        }
-    }
+    qDebug()<<"data:"<<*data<<"  size:"<<size;
+    QImage image;
+   // 直接从内存数据加载 JPEG
+   if (!image.loadFromData(data,size, "JPEG")) {
+       return QImage(); // 加载失败，返回空图像
+   }
+   // 可选的尺寸验证或缩放
+   if (image.width() != width || image.height() != height) {
+       image = image.scaled(width, height, Qt::IgnoreAspectRatio, Qt::SmoothTransformation);
+   }
+   // 确保输出为 RGB888
+   if (image.format() != QImage::Format_RGB888) {
+       image = image.convertToFormat(QImage::Format_RGB888);
+   }
+   return image;
+
 }
 
-void V4L2CaptureWidget::updateVideoFrame(const uchar *yuyvData, int width, int height)
+void V4L2CaptureWidget::updateVideoFrame(const uchar *Data,int size, int width, int height)
 {
     if (!this->videoLabel)
     {
         return;
     }
+    QImage rgbImage;
+    switch(this->currentVideoDeviceParams.validParamList
+           .at(this->ui->comboBox_video_params->currentIndex()).pixFmt)
+    {
+        case V4L2_PIX_FMT_YUYV:
+            rgbImage = convertYuyvToRgb(Data, width, height);
+        break;
 
-    // 转换YUYV到RGB
-    QImage rgbImage = convertYuyvToRgb(yuyvData, width, height);
+        case V4L2_PIX_FMT_MJPEG:
+            rgbImage = convertMjpegToRgb(Data, size ,width, height);
+    }
+
 
     // 缩放图像以适应QLabel大小（保持宽高比）
     QPixmap pixmap = QPixmap::fromImage(rgbImage);
@@ -190,7 +195,25 @@ void V4L2CaptureWidget::onVideoParamsComBoboxChanged(int index)
         this->lastParamsComboboxIndex = index;
         this->add_local_logs("[V4L2CaptureWidget][Operation] reset video params success");
         this->previewThread->setParams(this->currentVideoDeviceParams.validParamList.at(index));
+        this->add_local_logs(QString("[V4L2CaptureWidget][Operation] :"));
+        this->add_local_logs(QString("---- resolution:%1 x %2")
+                             .arg(this->currentVideoDeviceParams.validParamList.at(index).width)
+                             .arg(this->currentVideoDeviceParams.validParamList.at(index).height));
+        this->add_local_logs(QString("---- fps:%1")
+                             .arg(this->currentVideoDeviceParams.validParamList.at(index).fps));
+        this->add_local_logs(QString("---- pixFmt:%1")
+                             .arg(this->getPixFmtString(this->currentVideoDeviceParams.validParamList.at(index).pixFmt)));
+
     }
+}
+
+void V4L2CaptureWidget::showParamsWarnBox(const QString &title, const QString &message)
+{
+    bool oldState = this->ui->comboBox_video_params->blockSignals(true);
+    this->ui->comboBox_video_params->setCurrentIndex(0);
+    this->previewThread->setParams(this->currentVideoDeviceParams.validParamList.at(0));
+    this->ui->comboBox_video_params->blockSignals(oldState);
+    this->showWarningBox(this,title,message);
 }
 
 QString V4L2CaptureWidget::format_v4l2_error(const QString &operation, int err_code)
@@ -229,6 +252,7 @@ void V4L2CaptureWidget::startPreviewThread()
 
     this->previewThread->start();
     add_local_logs("[V4L2CaptureWidget][Success] start preview thread success");
+    emit this->add_Logs("[V4L2CaptureWidget][Operation] start preview");
 }
 
 
@@ -237,6 +261,7 @@ void V4L2CaptureWidget::stopPreviewThread()
     this->previewThread->stop_Preview();
     this->previewThread->wait();
     add_local_logs("[V4L2CaptureWidget][Success] stop preview thread");
+    emit this->add_Logs("[V4L2CaptureWidget][Operation] stop preview");
 }
 
 void V4L2CaptureWidget::on_open_close_device_button_clicked()

@@ -76,6 +76,8 @@ void MainWindow::init_connect()
     //page logs
     connect(this->device_manage_page,&ModelWidget::add_Logs,
             this,&MainWindow::add_logs);
+    connect(this->V4L2_capture_page,&ModelWidget::add_Logs,
+            this,&MainWindow::add_logs);
 
     //set Device
     // set_current_device信号连接
@@ -87,6 +89,7 @@ void MainWindow::init_connect()
     // 替换DeviceManageWidget的set_scaned_devices信号连接（需同步修改DeviceManageWidget的信号）
     connect(this->device_manage_page,&DeviceManageWidget::set_scaned_devices,
             this,&MainWindow::set_scaned_device);
+
 
 }
 

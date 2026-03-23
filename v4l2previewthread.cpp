@@ -101,8 +101,20 @@ void V4L2PreviewThread::run()
             emit this->add_Logs(QString("[V4L2PreviewThread][Success] Captured frame #%1").arg(frameCount));
         }
 
-        emit this->previewImageReady(static_cast<uchar*>(buffers[buf.index].start),
-                this->params.width, this->params.height);
+        qDebug()<<"pixFMt:"<<this->params.pixFmt;
+        switch(this->params.pixFmt){
+        case V4L2_PIX_FMT_YUYV:
+            emit this->previewImageReady(
+                        static_cast<uchar*>(buffers[buf.index].start),
+                        0,this->params.width, this->params.height);
+            break;
+        case V4L2_PIX_FMT_MJPEG:
+            emit this->previewImageReady(
+                        static_cast<uchar*>(buffers[buf.index].start),
+                        buf.bytesused,this->params.width, this->params.height);
+            break;
+        }
+
 
         // 将缓冲区重新入队
         if (ioctl(v4l2Fd, VIDIOC_QBUF, &buf) < 0) {
@@ -129,6 +141,8 @@ void V4L2PreviewThread::setParams(const V4L2Params &newParams)
 {
     QMutexLocker locker(&this->mutex);
     params = newParams;
+    qDebug()<<"params pixFMT:"<<params.pixFmt;
+//    this->set_V4L2_Format_And_Fps();
 }
 
 bool V4L2PreviewThread::init_V4L2_Buffers()
@@ -241,10 +255,35 @@ bool V4L2PreviewThread::set_V4L2_Format_And_Fps()
         return false;
     }
 
+    // ======检测驱动格式回退 ======
+    if(fmt.fmt.pix.pixelformat != params.pixFmt) {
+        // 1. 发送警告日志
+        QString requestedFmtStr = QString("%1").arg(params.pixFmt); // 需要确保可以访问此函数或实现类似逻辑
+        QString actualFmtStr = QString("%1").arg(fmt.fmt.pix.pixelformat);
+        emit
+        this->add_Logs(QString("[V4L2PreviewThread][Warning] Driver format fallback occurred!")
+                           +
+        QString(" Requested: %1 (0x%2), Actual: %3 (0x%4)")
+                           .arg(requestedFmtStr)
+                           .arg(params.pixFmt, 0, 16)
+                           .arg(actualFmtStr)
+                           .arg(fmt.fmt.pix.pixelformat, 0, 16));
+
+        // 2. （可选）重置线程内部参数状态，以匹配驱动实际设置
+        // 这样能保证后续逻辑（如图像转换分支判断）与实际情况一致。
+        QMutexLocker locker(&this->mutex); // 因为要修改成员变量params
+        params.pixFmt = fmt.fmt.pix.pixelformat;
+        params.width = fmt.fmt.pix.width;
+        params.height = fmt.fmt.pix.height;
+        emit this->paramsWarning("[V4L2PreviewThread]","Driver format fallback occurred!");
+
+    }
+
     emit this->add_Logs(QString("[V4L2PreviewThread][Debug] Actual format: %1x%2, PixFmt: 0x%3")
                            .arg(fmt.fmt.pix.width)
                            .arg(fmt.fmt.pix.height)
                            .arg(fmt.fmt.pix.pixelformat, 0, 16));
+
 
     // 2. 设置帧率
     struct v4l2_streamparm streamparm = {0};
@@ -267,8 +306,6 @@ bool V4L2PreviewThread::set_V4L2_Format_And_Fps()
     return true;
 
 }
-
-
 
 bool V4L2PreviewThread::start_V4L2_Stream()
 {
