@@ -30,17 +30,20 @@
       <item>
        <widget class="QPushButton" name="pushButton_start_capture">
         <property name="enabled">
-         <bool>false</bool>
+         <bool>true</bool>
         </property>
         <property name="text">
          <string>开始采集</string>
+        </property>
+        <property name="checkable">
+         <bool>false</bool>
         </property>
        </widget>
       </item>
       <item>
        <widget class="QPushButton" name="pushButton_stop_capture">
         <property name="enabled">
-         <bool>false</bool>
+         <bool>true</bool>
         </property>
         <property name="text">
          <string>停止采集</string>
@@ -50,10 +53,10 @@
       <item>
        <widget class="QPushButton" name="pushButton_capture_frame">
         <property name="enabled">
-         <bool>false</bool>
+         <bool>true</bool>
         </property>
         <property name="text">
-         <string> 捕获单帧</string>
+         <string> 捕获单帧(PNG)</string>
         </property>
        </widget>
       </item>
@@ -92,18 +95,15 @@
        </widget>
       </item>
       <item row="1" column="0">
-       <widget class="QComboBox" name="comboBoxRecordFormat">
-        <property name="currentIndex">
-         <number>0</number>
-        </property>
+       <widget class="QComboBox" name="comboBox_record_format">
         <item>
          <property name="text">
-          <string>采集格式: H264</string>
+          <string>H264</string>
          </property>
         </item>
         <item>
          <property name="text">
-          <string>采集格式: H265</string>
+          <string>H265</string>
          </property>
         </item>
        </widget>

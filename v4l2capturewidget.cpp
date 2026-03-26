@@ -8,6 +8,8 @@ V4L2CaptureWidget::V4L2CaptureWidget(QWidget *parent) : ModelWidget(parent),
     this->ui->pushButton_open_close_device->setProperty("device_state", false);
 
     this->previewThread = new V4L2PreviewThread();
+    this->recordThread = new V4L2RecordThread();
+
     this->videoLabel = nullptr;
     this->isVideoLabelInitialized = false;
 
@@ -31,6 +33,61 @@ void V4L2CaptureWidget::set_select_device(const selectedDeviceV4L2Params &newCur
     this->update_video_params();
 }
 
+void V4L2CaptureWidget::startRecordButtonClicked()
+{
+    this->add_local_logs(QString("[V4L2CaptureWidget][Operation] currentOutputPath:%1").arg(this->currentOutputPath));
+    if(!this->ui->pushButton_open_close_device->property("device_state").toBool()){
+        this->add_local_logs("[V4L2CaptureWidget][Operation] start record fail, please open device");
+        return;
+    }
+    if(this->recordThread->getIsRecording()){
+        this->add_local_logs("[V4L2CaptureWidget][Operation] start record fail, still recording");
+        return;
+    }
+    this->add_Logs("[V4L2CaptureWidget][Operation] start record button clicked");
+    emit this->startRecordThread(this->currentOutputPath,this->currentVideoDeviceParams.validParamList.at(this->ui->comboBox_video_params->currentIndex()),(EncodeFormat)this->ui->comboBox_record_format->currentIndex());
+    this->previewThread->setIsRecording(true);
+}
+
+void V4L2CaptureWidget::stopRecordButtonClicked()
+{
+
+    if(!this->ui->pushButton_open_close_device->property("device_state").toBool()){
+        this->add_local_logs("[V4L2CaptureWidget][Operation] stop record fail, please open device");
+        return;
+    }
+    if(!this->recordThread->getIsRecording()){
+        this->add_local_logs("[V4L2CaptureWidget][Operation] stop record fail, record thread has not been started");
+        return;
+    }
+    this->add_Logs("[V4L2CaptureWidget][Operation] stop record button clicked");
+    emit this->stopRecordThread();
+    this->previewThread->setIsRecording(false);
+}
+
+void V4L2CaptureWidget::captureFrameButtonClicked()
+{
+    this->add_Logs("[V4L2CaptureWidget][Operation] capture frame button clicked");
+    if(!this->ui->pushButton_open_close_device->property("device_state").toBool()){
+        this->add_local_logs("[V4L2CaptureWidget][Operation] stop record fail, please open device");
+        return;
+    }
+    if(!this->videoLabel->pixmap()){
+        add_local_logs("[V4L2CaptureWidget][Error] no frame available to save.");
+        return;
+    }
+    QDateTime currentTime = QDateTime::currentDateTime();
+    QString timeString = currentTime.toString("yyyy-MM-dd_HH:mm:ss");
+    QString imageOutputPath = this->currentOutputPath + "/" + timeString + ".png";
+
+    if (videoLabel->pixmap().save(imageOutputPath, "PNG")) {
+        add_local_logs(QString("[V4L2CaptureWidget][Success] frame saved: %1").arg(imageOutputPath));
+    } else {
+        add_local_logs(QString("[V4L2CaptureWidget][Error] Failed to save frame: %1").arg(imageOutputPath));
+    }
+
+}
+
 void V4L2CaptureWidget::initVideoLabel()
 {
     if (this->videoLabel)
@@ -50,7 +107,6 @@ void V4L2CaptureWidget::initVideoLabel()
     this->videoLabel->setScaledContents(false);
     this->videoLabel->setStyleSheet("QLabel { background-color: #222222; color: white; font-size: 16px; }");
     this->videoLabel->setText("无视频信号");
-
 
     this->videoLabel->show();
 
@@ -75,6 +131,28 @@ void V4L2CaptureWidget::init_connect()
     connect(this->ui->comboBox_video_params,&QComboBox::currentIndexChanged,
             this,&V4L2CaptureWidget::onVideoParamsComBoboxChanged);
 
+
+    // record thread
+    connect(this->recordThread, &V4L2RecordThread::addLocalLogs,
+            this, &V4L2CaptureWidget::add_local_logs);
+
+    connect(this->ui->pushButton_start_capture, &QPushButton::clicked,
+            this, &V4L2CaptureWidget::startRecordButtonClicked);
+
+    connect(this->ui->pushButton_stop_capture, &QPushButton::clicked,
+            this, &V4L2CaptureWidget::stopRecordButtonClicked);
+
+    connect(this,&V4L2CaptureWidget::startRecordThread,
+            this->recordThread, &V4L2RecordThread::receivedStartThreadSiganl);
+
+    connect(this,&V4L2CaptureWidget::stopRecordThread,
+            this->recordThread, &V4L2RecordThread::receivedStopThreadSignal);
+
+    connect(this->previewThread, &V4L2PreviewThread::recordImageReady,
+            this->recordThread, &V4L2RecordThread::receivedFrame);
+
+    connect(this->ui->pushButton_capture_frame, &QPushButton::clicked,
+            this, &V4L2CaptureWidget::captureFrameButtonClicked);
 }
 
 

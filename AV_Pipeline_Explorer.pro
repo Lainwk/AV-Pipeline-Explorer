@@ -48,6 +48,12 @@ FORMS += \
     mainwindow.ui \
     v4l2capturewidget.ui
 
+LIBS += -lavcodec \
+        -lavformat \
+        -lavutil \
+        -lswscale \
+        -lswresample
+
 # 部署规则（保留）
 qnx: target.path = /tmp/$${TARGET}/bin
 else: unix:!android: target.path = /opt/$${TARGET}/bin

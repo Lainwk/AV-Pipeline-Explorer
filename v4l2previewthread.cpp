@@ -87,8 +87,8 @@ void V4L2PreviewThread::run()
 
         ret = ioctl(this->v4l2Fd, VIDIOC_DQBUF, &buf);
         if(ret < 0){
-            emit this->add_Logs(QString("[V4L2PreviewThread][Error] Dequeue buffer failed: %1 (errno: %2)")
-                              .arg(strerror(errno)).arg(errno));
+//            emit this->add_Logs(QString("[V4L2PreviewThread][Error] Dequeue buffer failed: %1 (errno: %2)")
+//                              .arg(strerror(errno)).arg(errno));
             break;
         }
 
@@ -102,19 +102,15 @@ void V4L2PreviewThread::run()
         }
 
         qDebug()<<"pixFMt:"<<this->params.pixFmt;
-        switch(this->params.pixFmt){
-        case V4L2_PIX_FMT_YUYV:
-            emit this->previewImageReady(
-                        static_cast<uchar*>(buffers[buf.index].start),
-                        0,this->params.width, this->params.height);
-            break;
-        case V4L2_PIX_FMT_MJPEG:
-            emit this->previewImageReady(
+        emit this->previewImageReady(
+                    static_cast<uchar*>(buffers[buf.index].start),
+                    buf.bytesused,this->params.width, this->params.height);
+
+        if(this->isRecording){
+            emit this->recordImageReady(
                         static_cast<uchar*>(buffers[buf.index].start),
                         buf.bytesused,this->params.width, this->params.height);
-            break;
         }
-
 
         // 将缓冲区重新入队
         if (ioctl(v4l2Fd, VIDIOC_QBUF, &buf) < 0) {
@@ -129,6 +125,11 @@ void V4L2PreviewThread::run()
     this->release_V4L2_Buffers();
     emit this->add_Logs("[V4L2PreviewThread][Success] stop V4L2 thread run loop success");
 
+}
+
+void V4L2PreviewThread::setIsRecording(const QAtomicInteger<bool> &newIsRecording)
+{
+    isRecording = newIsRecording;
 }
 
 void V4L2PreviewThread::setV4l2Fd(int newV4l2Fd)

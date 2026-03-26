@@ -26,6 +26,11 @@ struct V4L2Params {
     }
 };
 
+enum EncodeFormat {
+        ENCODE_H264 = 0, ///< H.264
+        ENCODE_H265  ///< H.265
+};
+
 struct selectedDeviceV4L2Params {
     QString selectedVideoDevice;
     QList<V4L2Params> validParamList;
@@ -68,6 +73,7 @@ public:
         }
     }
 
+public slots:
     void setCurrentOutputPath(const QString &newCurrentOutputPath);
 
 public slots:

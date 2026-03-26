@@ -9,13 +9,14 @@ MainWindow::MainWindow(QWidget *parent)
     ui->setupUi(this);
 
     this->add_logs("[QMainWindow][System] system init");
-    this->ensureDefaultStorageDirExists();
 
     //initpages
     this->init_subpage();
 
     //init connect
     this->init_connect();
+
+    this->ensureDefaultStorageDirExists();
 
     this->add_logs("[System]init success");
 }
@@ -79,17 +80,18 @@ void MainWindow::init_connect()
     connect(this->V4L2_capture_page,&ModelWidget::add_Logs,
             this,&MainWindow::add_logs);
 
-    //set Device
+    // set Device
     // set_current_device信号连接
     connect(this,&MainWindow::set_current_device,
             this->device_manage_page,&ModelWidget::set_select_device);
     connect(this,&MainWindow::set_current_device,
             this->V4L2_capture_page,&V4L2CaptureWidget::set_select_device);
 
-    // 替换DeviceManageWidget的set_scaned_devices信号连接（需同步修改DeviceManageWidget的信号）
     connect(this->device_manage_page,&DeviceManageWidget::set_scaned_devices,
             this,&MainWindow::set_scaned_device);
 
+    connect(this, &MainWindow::setNewOutputPath,
+            this->V4L2_capture_page, &V4L2CaptureWidget::setCurrentOutputPath);
 
 }
 
@@ -120,6 +122,7 @@ void MainWindow::ensureDefaultStorageDirExists()
     } else {
         qWarning() << "目录创建失败:" << fullPath;
     }
+    emit this->setNewOutputPath(this->ui->outputPathEdit->text());
     return;
 }
 
@@ -237,5 +240,6 @@ void MainWindow::setOutputPath()
     this->ui->outputPathEdit->clear();
     this->ui->outputPathEdit->setText(dirPath);
     this->add_logs(QString("[MainWindow][Operation] current output path:%1").arg(this->ui->outputPathEdit->text()));
+    emit this->setNewOutputPath(dirPath);
 }
 

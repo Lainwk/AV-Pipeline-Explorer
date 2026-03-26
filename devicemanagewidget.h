@@ -42,7 +42,6 @@ private slots:
     void test_video_button_clicked();
     void test_audio_button_clicked();
 
-
 signals:
     void set_scaned_devices(const QStringList &videoDeviceList,
                             const QStringList &audioDeviceList,

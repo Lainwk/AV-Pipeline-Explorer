@@ -14,6 +14,7 @@
 #include <linux/videodev2.h>
 #include <QDebug>
 #include <QDateTime>
+#include <QFileInfo>
 #include "modelwidget.h"
 
 //FFMPEG
@@ -26,10 +27,6 @@ extern "C"
     #include <libswscale/swscale.h>
 }
 
-enum EncodeFormat {
-        ENCODE_H264 = 0, ///< H.264
-        ENCODE_H265  ///< H.265
-};
 
 struct FrameData
  {
@@ -48,6 +45,7 @@ public:
     ~V4L2RecordThread() override;
 
     bool startRecording(const QString &filePath,const V4L2Params &newParams, EncodeFormat format);
+    bool stopRecording();
 
     const QAtomicInteger<bool> &getIsRuning() const;
     void setIsRuning(const QAtomicInteger<bool> &newIsRuning);
@@ -57,6 +55,13 @@ public:
 
     const QAtomicInteger<bool> &getIsPause() const;
     void setIsPause(const QAtomicInteger<bool> &newIsPause);
+
+    const QAtomicInteger<bool> &getIsRecording() const;
+
+public slots:
+    void receivedFrame(const uchar *data,int size, int width,int height);
+    void receivedStartThreadSiganl(const QString &filePath,const V4L2Params &newParams, EncodeFormat format);
+    void receivedStopThreadSignal();
 
 protected:
     void run() override;
@@ -68,6 +73,7 @@ private:
     QAtomicInteger<bool> isRuning;
     QAtomicInteger<bool> isStop;
     QAtomicInteger<bool> isPause;
+    QAtomicInteger<bool> isRecording = false;
     V4L2Params params;
     EncodeFormat encodeFormat = ENCODE_H264;
 
@@ -88,14 +94,19 @@ private:
     bool ffmpegInilized;
 
     //statistics
-
+    quint64 encodedFrameCount;
+    qint64 startTime;
 
     //func
     bool initFFmpegResource();
     bool freeFFmpegResource();
 
+    void writeFileTrailer();
+    bool encodeAndWriteFrame(const FrameData &frameData);
+
     //tool func
     QString getCurrentTime();
+    AVPixelFormat v4l2ToFfmpegFormat(uint32_t v4l2PixFmt);
 
 signals:
     void addLocalLogs(const QString &message);

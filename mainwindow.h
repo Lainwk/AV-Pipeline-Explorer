@@ -59,6 +59,7 @@ private slots:
 
 signals:
     void set_current_device(const selectedDeviceV4L2Params &videoParams, const QString &audioDevice);
+    void setNewOutputPath(const QString &newFilePath);
 
 };
 #endif // MAINWINDOW_H

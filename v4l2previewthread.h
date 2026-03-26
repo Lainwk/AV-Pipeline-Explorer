@@ -31,6 +31,8 @@ public:
 
     void setV4l2Fd(int newV4l2Fd);
 
+    void setIsRecording(const QAtomicInteger<bool> &newIsRecording);
+
 protected:
     void run() override;
 
@@ -48,7 +50,9 @@ private:
     Buffer *buffers = nullptr;      // 缓冲区数组
     int bufferCount = 0;            // 缓冲区数量
     V4L2Params params;              // 视频采集参数
+    QAtomicInteger<bool> isRecording = false;
 
+    // func
     bool init_V4L2_Buffers();
     void release_V4L2_Buffers();
     // 设置V4L2采集格式和帧率
@@ -62,7 +66,7 @@ private:
 signals:
     // 预览图像发送给UI线程
     void previewImageReady(const uchar *Data, int size,int width, int height);
-
+    void recordImageReady(const uchar *Data, int size,int width, int height);
 
     // add logs
     void add_Logs(const QString &logmessage);

@@ -7,7 +7,7 @@ ModelWidget::ModelWidget(QWidget *parent)
 
 void ModelWidget::setCurrentOutputPath(const QString &newCurrentOutputPath)
 {
-
+    this->currentOutputPath = newCurrentOutputPath;
 }
 
 void ModelWidget::set_select_device(const selectedDeviceV4L2Params &newCurrentVideoDeviceParams, const QString &newSelected_audio_device)
